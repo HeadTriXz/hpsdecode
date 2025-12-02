@@ -1,0 +1,22 @@
+src = ["src"]
+line-length = 120
+
+[lint]
+select = ["B", "D", "E4", "E7", "E9", "F", "I", "N", "W292"]
+ignore = [
+    "B026",
+    "B905",
+    "D100",
+    "D104",
+    "D203",
+    "D213",
+    "D301",
+    "D401",
+    "D417",
+]
+
+[format]
+indent-style = "space"
+line-ending = "lf"
+quote-style = "double"
+preview = true

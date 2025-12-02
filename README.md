@@ -102,7 +102,6 @@ HPS files are XML documents containing base64-encoded binary mesh data:
   python examples/view_hps.py path/to/file.hps
   ```
 
-  > [!NOTE]
   > Run `pip install trimesh[recommended]` for viewing support.
 
 

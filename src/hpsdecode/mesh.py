@@ -45,6 +45,12 @@ class HPSPackedScan:
     #: Expected face count from file metadata.
     num_faces: int
 
+    #: The raw vertex data.
+    vertex_data: bytes
+
+    #: The raw face data.
+    face_data: bytes
+
     #: Parsed vertex command sequence.
     vertex_commands: list[AnyVertexCommand]
 

@@ -129,6 +129,8 @@ def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMe
         schema=schema,
         num_vertices=num_vertices,
         num_faces=num_faces,
+        vertex_data=vertex_data,
+        face_data=face_data,
         vertex_commands=result.vertex_commands,
         face_commands=result.face_commands,
     )

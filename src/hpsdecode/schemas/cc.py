@@ -238,8 +238,8 @@ class CCSchemaParser(BaseSchemaParser):
                     v2=reader.read_uint32(),
                 )
             case hpc.FaceCommandType.ABSOLUTE_16:
-                # Why does it need a 32 bits read for a 16 bits value? (╯°□°）╯︵ ┻━┻
-                return hpc.Absolute16(v=reader.read_uint32() & 0xFFFF)
+                # Why can the Absolute16 command have 32-bit values? (╯°□°）╯︵ ┻━┻
+                return hpc.Absolute16(v=reader.read_uint32())
             case hpc.FaceCommandType.ABSOLUTE_32:
                 return hpc.Absolute32(v=reader.read_uint32())
             case hpc.FaceCommandType.REMOVE:

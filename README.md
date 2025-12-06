@@ -8,19 +8,12 @@
 
 </div>
 
-A Python library for decoding HPS (HIMSA Packed Scan) files as specified in
-the [Packed Scan Standard Format 501](https://himsafiles.com/DataStandards/DataStandards/Scan/Packed%20Scan%20Standard%20format%20501.pdf).
+A Python library for decoding HPS (HIMSA Packed Scan) and DCM files used by dental and audiological scanning software
+such as [3Shape](https://www.3shape.com/) and [ShapeDesigner](https://www.mechatools.com/en/shapedesigner.html).
 
-HPS is a compressed 3D mesh format commonly used in dental and audiological scanning applications, including 3Shape
-dental scanners and other HIMSA-compliant devices.
-
+HPS is a compressed 3D mesh format commonly used in dental scanning applications and other HIMSA-compliant devices.
 
 ## Getting Started
-
-### Requirements
-
-- Python 3.11+
-- NumPy
 
 ### Installation
 
@@ -34,12 +27,12 @@ pip install hpsdecode
 from hpsdecode import load_hps
 
 # Load from file path
-packed_scan, mesh = load_hps("scan.hps")
+packed, mesh = load_hps("scan.dcm")
 
 # Access mesh data
 print(f"Vertices: {mesh.num_vertices}")
 print(f"Faces: {mesh.num_faces}")
-print(f"Schema: {packed_scan.schema}")
+print(f"Schema: {packed.schema}")
 
 # Vertex positions as (N, 3) float32 array
 vertices = mesh.vertices
@@ -48,27 +41,73 @@ vertices = mesh.vertices
 faces = mesh.faces
 ```
 
-
 ## Compression Schemas
 
-| Schema | Status      | Description                                                                                       |
-|--------|-------------|---------------------------------------------------------------------------------------------------|
-| **CA** | ✅ Supported | Identical to CC; provided for backward compatibility.                                             |
-| **CB** | 🚧 Planned  | Supports compression of both vertices and faces, with optional color and texture data.            |
-| **CC** | ✅ Supported | Stores uncompressed vertices and compressed faces; does not support color or texture information. |
-| **CE** | 🚧 Planned  | Reserved for future use; details of this schema are currently unknown.                            |
+| Schema | Status        | Description                                                                        |
+|--------|---------------|------------------------------------------------------------------------------------|
+| **CA** | ✅ Supported   | Identical to CC; provided for backward compatibility.                              |
+| **CB** | ❌ Not Planned | Lossy compression with optional color and texture data. No example data available. |
+| **CC** | ✅ Supported   | Lossless compression with uncompressed vertices and compressed faces.              |
+| **CE** | ✅ Supported   | Encrypted version of CC. Requires an encryption key.                               |
 
-The CC compression schema is similar to CB but is simpler and fully lossless. It stores each vertex as three 32-bit
-floats (x, y, z) and uses a 4-bit instruction set for faces. CC does not compress as much as CB and cannot store texture
-or special commands like color changes.
+## Encrypted Files (CE Schema)
 
+Some HPS files use the CE schema, which encrypts the mesh data. To decode these files, you must provide the encryption key.
+
+> [!NOTE]
+> This library does not provide encryption keys, nor will it provide instructions on how to obtain them.
+
+### Providing the Encryption Key
+
+**Option 1: Environment Variable (Recommended)**
+
+Set the `HPS_ENCRYPTION_KEY` environment variable before loading files:
+
+```sh
+export HPS_ENCRYPTION_KEY="28,141,16,74,219,32,11,126,55,178,97,3,41,82,213,222"
+```
+
+```python
+from hpsdecode import load_hps
+
+# Automatically uses the key from the environment variable
+packed, mesh = load_hps("encrypted.hps")
+```
+
+**Option 2: Direct Key**
+
+Provide the key directly as a bytes object:
+
+```python
+from hpsdecode import load_hps
+
+key = bytes([28, 141, 16, 74, 219, 32, 11, 126, 55, 178, 97, 3, 41, 82, 213, 222])
+
+packed, mesh = load_hps("encrypted.hps", encryption_key=key)
+```
+
+**Option 3: Custom Key Provider**
+
+Implement your own key provider for advanced use cases (e.g., loading from a configuration file):
+
+```python
+from hpsdecode import load_hps
+from hpsdecode.encryption import EncryptionKeyProvider
+
+class MyKeyProvider(EncryptionKeyProvider):
+    def get_key(self, properties):
+        return load_key_from_config()
+
+
+key_provider = MyKeyProvider()
+packed, mesh = load_hps("encrypted.hps", encryption_key=key_provider)
+```
 
 ## File Format Overview
 
 HPS files are XML documents containing base64-encoded binary mesh data:
 
 ```xml
-
 <HPS version="1.1">
     <Packed_geometry>
         <Schema>CA</Schema>
@@ -102,7 +141,7 @@ HPS files are XML documents containing base64-encoded binary mesh data:
   python examples/view_hps.py path/to/file.hps
   ```
 
-  > Run `pip install trimesh[recommended]` for viewing support.
+  > Run `pip install trimesh[recommend]` for viewing support.
 
 
 ## Contributing

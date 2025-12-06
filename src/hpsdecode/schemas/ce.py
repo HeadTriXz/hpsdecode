@@ -8,6 +8,7 @@ import hashlib
 import zlib
 
 from hpsdecode.encryption import BlowfishDecryptor, EncryptionKeyProvider, EnvironmentKeyProvider, StaticKeyProvider
+from hpsdecode.exceptions import HPSEncryptionError
 from hpsdecode.schemas.base import ParseContext, ParseResult
 from hpsdecode.schemas.cc import CCSchemaParser
 
@@ -53,7 +54,7 @@ class CESchemaParser(CCSchemaParser):
             adler = int.from_bytes(adler.to_bytes(4, "little"), "big")
 
             if adler != context.check_value:
-                raise ValueError(
+                raise HPSEncryptionError(
                     f"Vertex data integrity check failed: expected {context.check_value:#010x}, got {adler:#010x}"
                 )
 

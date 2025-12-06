@@ -1,6 +1,6 @@
 [project]
 name = "hpsdecode"
-version = "0.0.2"
+version = "0.1.0"
 description = "A library for decoding HIMSA packed standard (HPS) files."
 readme = "README.md"
 license = { file = "LICENSE" }

@@ -2,17 +2,16 @@
 
 __all__ = ["CBSchemaParser"]
 
-from hpsdecode.schemas.base import BaseSchemaParser, ParseResult
+from hpsdecode.schemas.base import BaseSchemaParser, ParseContext, ParseResult
 
 
 class CBSchemaParser(BaseSchemaParser):
     """Parser for the 'CB' HPS compression schema."""
 
-    def parse(self, vertex_data: bytes, face_data: bytes) -> ParseResult:
+    def parse(self, context: ParseContext) -> ParseResult:
         """Parse HPS binary data for the 'CB' schema.
 
-        :param vertex_data: The binary data for vertex commands.
-        :param face_data: The binary data for face commands.
+        :param context: The parsing context containing metadata and binary data.
         :return: The parsing result containing the decoded mesh and commands.
         """
         raise NotImplementedError()

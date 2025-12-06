@@ -9,13 +9,14 @@ __all__ = [
     "CBSchemaParser",
     "CCSchemaParser",
     "CESchemaParser",
+    "ParseContext",
     "ParseResult",
     "get_parser",
 ]
 
 import typing as t
 
-from hpsdecode.schemas.base import BaseSchemaParser, ParseResult
+from hpsdecode.schemas.base import BaseSchemaParser, ParseContext, ParseResult
 from hpsdecode.schemas.ca import CASchemaParser
 from hpsdecode.schemas.cb import CBSchemaParser
 from hpsdecode.schemas.cc import CCSchemaParser

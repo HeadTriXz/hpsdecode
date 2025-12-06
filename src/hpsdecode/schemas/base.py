@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["BaseSchemaParser", "ParseResult"]
+__all__ = ["BaseSchemaParser", "ParseContext", "ParseResult"]
 
 import abc
 import dataclasses
@@ -11,6 +11,32 @@ import typing as t
 if t.TYPE_CHECKING:
     import hpsdecode.commands as hpc
     from hpsdecode.mesh import HPSMesh
+
+
+@dataclasses.dataclass(frozen=True)
+class ParseContext:
+    """Context object containing metadata required for parsing HPS data."""
+
+    #: The binary data for the vertices.
+    vertex_data: bytes | None = None
+
+    #: The binary data for the faces.
+    face_data: bytes | None = None
+
+    #: The number of vertices in the mesh, if known.
+    vertex_count: int | None = None
+
+    #: The number of faces in the mesh, if known.
+    face_count: int | None = None
+
+    #: The default vertex color to use if it cannot be determined from the data.
+    default_vertex_color: int | None = None
+
+    #: The default face color to use if it cannot be determined from the data.
+    default_face_color: int | None = None
+
+    #: The HPS file properties (e.g., encryption keys, package locks).
+    properties: dict[str, str] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -31,11 +57,10 @@ class BaseSchemaParser(abc.ABC):
     """Abstract base class for HPS schema parsers."""
 
     @abc.abstractmethod
-    def parse(self, vertex_data: bytes, face_data: bytes) -> ParseResult:
+    def parse(self, context: ParseContext) -> ParseResult:
         """Parse HPS binary data for the specific schema.
 
-        :param vertex_data: The binary data for vertex commands.
-        :param face_data: The binary data for face commands.
+        :param context: The parsing context containing metadata and binary data.
         :return: The parsing result containing the decoded mesh and commands.
         """
         pass

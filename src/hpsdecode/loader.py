@@ -12,7 +12,7 @@ import numpy as np
 
 from hpsdecode.exceptions import HPSParseError, HPSSchemaError
 from hpsdecode.mesh import HPSMesh, HPSPackedScan, SchemaType
-from hpsdecode.schemas import SUPPORTED_SCHEMAS, get_parser
+from hpsdecode.schemas import SUPPORTED_SCHEMAS, ParseContext, get_parser
 
 if t.TYPE_CHECKING:
     import os
@@ -24,18 +24,11 @@ def decode_binary_element(element: ET.Element) -> bytes:
     :param element: The XML element containing base64-encoded data.
     :return: The decoded binary data.
     """
-    expected_length = int(element.get("base64_encoded_bytes", "0"))
     text = element.text
     if text is None:
         raise HPSParseError(f"Element '{element.tag}' has no binary data")
 
-    data = base64.b64decode(text.strip())
-    if len(data) != expected_length:
-        raise HPSParseError(
-            f"Binary data length mismatch in '{element.tag}': expected {expected_length}, got {len(data)}"
-        )
-
-    return data
+    return base64.b64decode(text.strip())
 
 
 def get_required_child(parent: ET.Element, path: str) -> ET.Element:
@@ -108,22 +101,35 @@ def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMe
     num_vertices = int(vertices_element.get("vertex_count", "0"))
     num_faces = int(faces_element.get("facet_count", "0"))
 
+    default_vertex_color = vertices_element.get("color")
+    default_face_color = faces_element.get("color")
+
+    context = ParseContext(
+        vertex_data=vertex_data,
+        face_data=face_data,
+        vertex_count=num_vertices,
+        face_count=num_faces,
+        default_vertex_color=int(default_vertex_color) if default_vertex_color else None,
+        default_face_color=int(default_face_color) if default_face_color else None,
+    )
+
+    properties_element = root.find("Properties")
+    if properties_element is not None:
+        for property in properties_element.findall("Property"):
+            name = property.get("name")
+            value = property.get("value")
+
+            if name is not None and value is not None:
+                context.properties[name] = value
+
     parser = get_parser(schema)
-    result = parser.parse(vertex_data, face_data)
+    result = parser.parse(context)
 
     if result.mesh.num_vertices != num_vertices:
         raise HPSParseError(f"Vertex count mismatch: expected {num_vertices}, got {result.mesh.num_vertices}")
 
     if result.mesh.num_faces != num_faces:
         raise HPSParseError(f"Face count mismatch: expected {num_faces}, got {result.mesh.num_faces}")
-
-    if result.mesh.face_colors.size == 0 and (color := faces_element.get("color")):
-        color = int(color)
-        r = (color >> 16) & 0xFF
-        g = (color >> 8) & 0xFF
-        b = color & 0xFF
-
-        result.mesh.face_colors = np.tile(np.array([[r, g, b]], dtype=np.uint8), (num_faces, 1))
 
     packed = HPSPackedScan(
         schema=schema,

@@ -36,6 +36,7 @@ def main() -> None:
 
     print("\n[Metadata]")
     print(f"  Schema: {packed.schema}")
+    print(f"  Encrypted: {'Yes' if packed.is_encrypted else 'No'}")
     print(f"  Expected Vertices: {packed.num_vertices}")
     print(f"  Expected Faces: {packed.num_faces}")
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 __all__ = ["CESchemaParser"]
 
 import hashlib
+import zlib
 
 from hpsdecode.encryption import BlowfishDecryptor, EncryptionKeyProvider, EnvironmentKeyProvider, StaticKeyProvider
 from hpsdecode.schemas.base import ParseContext, ParseResult
@@ -47,6 +48,15 @@ class CESchemaParser(CCSchemaParser):
         key = self._derive_key(context.properties)
 
         decrypted_vertex_data = BlowfishDecryptor(key).decrypt(context.vertex_data, context.vertex_count * 12)
+        if context.check_value is not None:
+            adler = zlib.adler32(decrypted_vertex_data) & 0xFFFFFFFF
+            adler = int.from_bytes(adler.to_bytes(4, "little"), "big")
+
+            if adler != context.check_value:
+                raise ValueError(
+                    f"Vertex data integrity check failed: expected {context.check_value:#010x}, got {adler:#010x}"
+                )
+
         decrypted_context = ParseContext(
             properties=context.properties,
             vertex_data=decrypted_vertex_data,

@@ -100,7 +100,7 @@ def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMe
 
     num_vertices = int(vertices_element.get("vertex_count", "0"))
     num_faces = int(faces_element.get("facet_count", "0"))
-
+    check_value = vertices_element.get("check_value")
     default_vertex_color = vertices_element.get("color")
     default_face_color = faces_element.get("color")
 
@@ -111,6 +111,7 @@ def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMe
         face_count=num_faces,
         default_vertex_color=int(default_vertex_color) if default_vertex_color else None,
         default_face_color=int(default_face_color) if default_face_color else None,
+        check_value=int(check_value) if check_value else None,
     )
 
     properties_element = root.find("Properties")

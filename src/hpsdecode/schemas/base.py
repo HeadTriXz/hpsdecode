@@ -35,6 +35,9 @@ class ParseContext:
     #: The default face color to use if it cannot be determined from the data.
     default_face_color: int | None = None
 
+    #: The value used for integrity checking, if available.
+    check_value: int | None = None
+
     #: The HPS file properties (e.g., encryption keys, package locks).
     properties: dict[str, str] = dataclasses.field(default_factory=dict)
 

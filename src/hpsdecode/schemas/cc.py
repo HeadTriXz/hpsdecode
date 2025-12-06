@@ -12,7 +12,7 @@ import hpsdecode.commands as hpc
 from hpsdecode.binary import BinaryReader
 from hpsdecode.exceptions import HPSParseError
 from hpsdecode.mesh import Edge, HPSMesh
-from hpsdecode.schemas import BaseSchemaParser, ParseResult
+from hpsdecode.schemas.base import BaseSchemaParser, ParseContext, ParseResult
 
 if t.TYPE_CHECKING:
     import numpy.typing as npt
@@ -30,22 +30,35 @@ class CCSchemaParser(BaseSchemaParser):
         """Initialize the CC schema parser."""
         self._clear()
 
-    def parse(self, vertex_data: bytes, face_data: bytes) -> ParseResult:
+    def parse(self, context: ParseContext) -> ParseResult:
         """Parse HPS binary data for the 'CC' schema.
 
-        :param vertex_data: The binary data for vertex commands.
-        :param face_data: The binary data for face commands.
+        :param context: The parsing context containing metadata and binary data.
         :return: The parsing result containing the decoded mesh and commands.
         """
-        vertices, vertex_commands = self.parse_vertices(vertex_data)
-        faces, face_commands = self.parse_faces(face_data)
+        vertices, vertex_commands = self.parse_vertices(context.vertex_data)
+        faces, face_commands = self.parse_faces(context.face_data)
+
+        vertex_colors = np.empty((0, 3), dtype=np.uint8)
+        if context.default_vertex_color is not None:
+            c = context.default_vertex_color & 0xFFFFFF
+            vc = ((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF)
+
+            vertex_colors = np.full((vertices.shape[0], 3), vc, dtype=np.uint8)
+
+        face_colors = np.empty((0, 3), dtype=np.uint8)
+        if context.default_face_color is not None:
+            c = context.default_face_color & 0xFFFFFF
+            fc = ((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF)
+
+            face_colors = np.full((faces.shape[0], 3), fc, dtype=np.uint8)
 
         return ParseResult(
             mesh=HPSMesh(
                 vertices=vertices,
                 faces=faces,
-                vertex_colors=np.empty((0, 3), dtype=np.uint8),
-                face_colors=np.empty((0, 3), dtype=np.uint8),
+                vertex_colors=vertex_colors,
+                face_colors=face_colors,
                 uv=np.empty((0, 2), dtype=np.float32),
             ),
             vertex_commands=vertex_commands,
@@ -119,7 +132,6 @@ class CCSchemaParser(BaseSchemaParser):
         self._edge_list.pop(self._current_edge_idx)
         self._edge_list.insert(self._current_edge_idx, new_edge2)
         self._edge_list.insert(self._current_edge_idx, new_edge1)
-
 
     def _handle_previous(self) -> None:
         """Create a face using the previous edge's start vertex."""

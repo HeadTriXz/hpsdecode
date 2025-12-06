@@ -1,6 +1,12 @@
 """Exceptions for HPS decoding errors."""
 
-__all__ = ["HPSParseError", "HPSSchemaError"]
+__all__ = ["HPSEncryptionError", "HPSParseError", "HPSSchemaError"]
+
+
+class HPSEncryptionError(Exception):
+    """Raised when decryption of HPS data fails."""
+
+    pass
 
 
 class HPSParseError(Exception):

@@ -23,9 +23,13 @@ def main() -> None:
         print(f"Error loading HPS file: {e}")
         return
 
-    t_mesh = trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces, process=False)
-    if mesh.vertex_colors.size > 0:
-        t_mesh.visual.vertex_colors = mesh.vertex_colors
+    t_mesh = trimesh.Trimesh(
+        vertices=mesh.vertices,
+        faces=mesh.faces,
+        vertex_colors=mesh.vertex_colors,
+        face_colors=mesh.face_colors,
+        process=False,
+    )
 
     t_mesh.show(caption=args.input.name)
 

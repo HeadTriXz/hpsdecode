@@ -8,14 +8,14 @@ import base64
 import typing as t
 import xml.etree.ElementTree as ET
 
-import numpy as np
-
 from hpsdecode.exceptions import HPSParseError, HPSSchemaError
 from hpsdecode.mesh import HPSMesh, HPSPackedScan, SchemaType
-from hpsdecode.schemas import SUPPORTED_SCHEMAS, get_parser
+from hpsdecode.schemas import SUPPORTED_SCHEMAS, ParseContext, get_parser
 
 if t.TYPE_CHECKING:
     import os
+
+    from hpsdecode.encryption import EncryptionKeyProvider
 
 
 def decode_binary_element(element: ET.Element) -> bytes:
@@ -24,18 +24,11 @@ def decode_binary_element(element: ET.Element) -> bytes:
     :param element: The XML element containing base64-encoded data.
     :return: The decoded binary data.
     """
-    expected_length = int(element.get("base64_encoded_bytes", "0"))
     text = element.text
     if text is None:
         raise HPSParseError(f"Element '{element.tag}' has no binary data")
 
-    data = base64.b64decode(text.strip())
-    if len(data) != expected_length:
-        raise HPSParseError(
-            f"Binary data length mismatch in '{element.tag}': expected {expected_length}, got {len(data)}"
-        )
-
-    return data
+    return base64.b64decode(text.strip())
 
 
 def get_required_child(parent: ET.Element, path: str) -> ET.Element:
@@ -76,19 +69,34 @@ def parse_xml(file: str | os.PathLike[str] | bytes) -> ET.ElementTree:
     return ET.parse(file)
 
 
-def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMesh]:
+def load_hps(
+    file: str | os.PathLike[str] | bytes,
+    encryption_key: bytes | EncryptionKeyProvider | None = None,
+) -> tuple[HPSPackedScan, HPSMesh]:
     """Load an HPS file and decode its contents.
 
     :param file: The path to the HPS file, raw bytes, or a file-like object.
+    :param encryption_key: The encryption key for encrypted schemas. Can be raw bytes,
+        an :py:class:`hpsdecode.encryption.EncryptionKeyProvider`, or ``None`` to read the key
+        from the ``HPS_ENCRYPTION_KEY`` environment variable.
     :return: A tuple containing the packed scan metadata and the decoded mesh.
     :raises HPSSchemaError: If the file uses an unsupported compression schema.
     :raises HPSParseError: If the file structure is invalid.
+    :raises HPSEncryptionError: If decryption fails (CE schema only).
 
     .. code-block:: python
 
+        # Unencrypted file
         packed, mesh = load_hps("model.hps")
-        print(f"Schema: {packed.schema}")
-        print(f"Loaded {len(mesh.vertices)} vertices and {len(mesh.faces)} faces.")
+
+        # Encrypted file with static key
+        packed, mesh = load_hps("encrypted.hps", encryption_key=bytes([28, 141, 16, ...]))
+
+        # Encrypted file with custom provider
+        packed, mesh = load_hps("encrypted.hps", encryption_key=MyKeyProvider())
+
+        # Encrypted file using environment variable (set 'HPS_ENCRYPTION_KEY')
+        packed, mesh = load_hps("encrypted.hps")
 
     """
     tree = parse_xml(file)
@@ -107,23 +115,37 @@ def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMe
 
     num_vertices = int(vertices_element.get("vertex_count", "0"))
     num_faces = int(faces_element.get("facet_count", "0"))
+    check_value = vertices_element.get("check_value")
+    default_vertex_color = vertices_element.get("color")
+    default_face_color = faces_element.get("color")
 
-    parser = get_parser(schema)
-    result = parser.parse(vertex_data, face_data)
+    context = ParseContext(
+        vertex_data=vertex_data,
+        face_data=face_data,
+        vertex_count=num_vertices,
+        face_count=num_faces,
+        default_vertex_color=int(default_vertex_color) if default_vertex_color else None,
+        default_face_color=int(default_face_color) if default_face_color else None,
+        check_value=int(check_value) if check_value else None,
+    )
+
+    properties_element = root.find("Properties")
+    if properties_element is not None:
+        for property in properties_element.findall("Property"):
+            name = property.get("name")
+            value = property.get("value")
+
+            if name is not None and value is not None:
+                context.properties[name] = value
+
+    parser = get_parser(schema, encryption_key)
+    result = parser.parse(context)
 
     if result.mesh.num_vertices != num_vertices:
         raise HPSParseError(f"Vertex count mismatch: expected {num_vertices}, got {result.mesh.num_vertices}")
 
     if result.mesh.num_faces != num_faces:
         raise HPSParseError(f"Face count mismatch: expected {num_faces}, got {result.mesh.num_faces}")
-
-    if result.mesh.face_colors.size == 0 and (color := faces_element.get("color")):
-        color = int(color)
-        r = (color >> 16) & 0xFF
-        g = (color >> 8) & 0xFF
-        b = color & 0xFF
-
-        result.mesh.face_colors = np.tile(np.array([[r, g, b]], dtype=np.uint8), (num_faces, 1))
 
     packed = HPSPackedScan(
         schema=schema,

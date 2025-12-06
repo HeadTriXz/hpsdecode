@@ -57,6 +57,11 @@ class HPSPackedScan:
     #: Parsed face command sequence.
     face_commands: list[AnyFaceCommand]
 
+    @property
+    def is_encrypted(self) -> bool:
+        """Whether the scan data is encrypted."""
+        return self.schema == "CE"
+
 
 @dataclasses.dataclass
 class HPSMesh:

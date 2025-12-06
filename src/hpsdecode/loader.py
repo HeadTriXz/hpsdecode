@@ -8,14 +8,14 @@ import base64
 import typing as t
 import xml.etree.ElementTree as ET
 
-import numpy as np
-
 from hpsdecode.exceptions import HPSParseError, HPSSchemaError
 from hpsdecode.mesh import HPSMesh, HPSPackedScan, SchemaType
 from hpsdecode.schemas import SUPPORTED_SCHEMAS, ParseContext, get_parser
 
 if t.TYPE_CHECKING:
     import os
+
+    from hpsdecode.encryption import EncryptionKeyProvider
 
 
 def decode_binary_element(element: ET.Element) -> bytes:
@@ -69,19 +69,34 @@ def parse_xml(file: str | os.PathLike[str] | bytes) -> ET.ElementTree:
     return ET.parse(file)
 
 
-def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMesh]:
+def load_hps(
+    file: str | os.PathLike[str] | bytes,
+    encryption_key: bytes | EncryptionKeyProvider | None = None,
+) -> tuple[HPSPackedScan, HPSMesh]:
     """Load an HPS file and decode its contents.
 
     :param file: The path to the HPS file, raw bytes, or a file-like object.
+    :param encryption_key: The encryption key for encrypted schemas. Can be raw bytes,
+        an :py:class:`hpsdecode.encryption.EncryptionKeyProvider`, or ``None`` to read the key
+        from the ``HPS_ENCRYPTION_KEY`` environment variable.
     :return: A tuple containing the packed scan metadata and the decoded mesh.
     :raises HPSSchemaError: If the file uses an unsupported compression schema.
     :raises HPSParseError: If the file structure is invalid.
+    :raises HPSEncryptionError: If decryption fails (CE schema only).
 
     .. code-block:: python
 
+        # Unencrypted file
         packed, mesh = load_hps("model.hps")
-        print(f"Schema: {packed.schema}")
-        print(f"Loaded {len(mesh.vertices)} vertices and {len(mesh.faces)} faces.")
+
+        # Encrypted file with static key
+        packed, mesh = load_hps("encrypted.hps", encryption_key=bytes([28, 141, 16, ...]))
+
+        # Encrypted file with custom provider
+        packed, mesh = load_hps("encrypted.hps", encryption_key=MyKeyProvider())
+
+        # Encrypted file using environment variable (set 'HPS_ENCRYPTION_KEY')
+        packed, mesh = load_hps("encrypted.hps")
 
     """
     tree = parse_xml(file)
@@ -123,7 +138,7 @@ def load_hps(file: str | os.PathLike[str] | bytes) -> tuple[HPSPackedScan, HPSMe
             if name is not None and value is not None:
                 context.properties[name] = value
 
-    parser = get_parser(schema)
+    parser = get_parser(schema, encryption_key)
     result = parser.parse(context)
 
     if result.mesh.num_vertices != num_vertices:

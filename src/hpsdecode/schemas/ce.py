@@ -28,8 +28,9 @@ class CESchemaParser(CCSchemaParser):
     def __init__(self, encryption_key: bytes | EncryptionKeyProvider | None = None) -> None:
         """Initialize the CE schema parser.
 
-        :param encryption_key: Encryption key as bytes, a key provider or None. If None, it will use
-            the EnvironmentKeyProvider to read from the environment variable (``HPS_ENCRYPTION_KEY``).
+        :param encryption_key: The encryption key. Can be raw bytes,
+            an :py:class:`hpsdecode.encryption.EncryptionKeyProvider`, or ``None`` to read the key
+            from the ``HPS_ENCRYPTION_KEY`` environment variable.
         """
         super().__init__()
 

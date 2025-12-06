@@ -60,13 +60,13 @@ class EnvironmentKeyProvider(EncryptionKeyProvider):
 
     The key can be provided as either:
 
-    - Comma-separated list of byte values (e.g., ``"10,20,30,40,50,..."``).
+    - Comma-separated list of byte values (e.g., ``"28,141,16,..."``).
     - A raw string that will be encoded using ISO-8859-1.
 
     .. code-block:: python
 
         # Set the environment variable
-        # export HPS_ENCRYPTION_KEY="10,20,30,40,50,..."
+        # export HPS_ENCRYPTION_KEY="28,141,16,..."
 
         provider = EnvironmentKeyProvider()
         key = provider.get_key({})
@@ -122,7 +122,7 @@ class StaticKeyProvider(EncryptionKeyProvider):
 
     code-block:: python
 
-        key = bytes([10, 20, 30, 40, 50, ...])
+        key = bytes([28, 141, 16, ...])
         provider = StaticKeyProvider(key)
 
     """

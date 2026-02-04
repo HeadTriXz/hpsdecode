@@ -82,6 +82,9 @@ class HPSMesh:
     #: Texture coordinates as (N, 2) float array, or empty.
     uv: npt.NDArray[np.floating]
 
+    #: Texture image data (raw bytes, multiple images possible).
+    texture_images: list[bytes] = dataclasses.field(default_factory=list)
+
     @property
     def num_faces(self) -> int:
         """Number of faces in the mesh."""
@@ -91,3 +94,23 @@ class HPSMesh:
     def num_vertices(self) -> int:
         """Number of vertices in the mesh."""
         return int(self.vertices.shape[0])
+
+    @property
+    def has_texture_coords(self) -> bool:
+        """Whether the mesh has texture coordinates."""
+        return self.uv.size > 0
+
+    @property
+    def has_vertex_colors(self) -> bool:
+        """Whether the mesh has per-vertex colors."""
+        return self.vertex_colors.size > 0
+
+    @property
+    def has_face_colors(self) -> bool:
+        """Whether the mesh has per-face colors."""
+        return self.face_colors.size > 0
+
+    @property
+    def has_textures(self) -> bool:
+        """Whether the mesh has texture image data."""
+        return len(self.texture_images) > 0

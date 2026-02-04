@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["BaseSchemaParser", "ParseContext", "ParseResult"]
+__all__ = ["BaseSchemaParser", "EncryptedData", "ParseContext", "ParseResult"]
 
 import abc
 import dataclasses
@@ -14,11 +14,25 @@ if t.TYPE_CHECKING:
 
 
 @dataclasses.dataclass(frozen=True)
+class EncryptedData:
+    """Container for encrypted data with metadata needed for decryption."""
+
+    #: The encrypted binary data.
+    data: bytes
+
+    #: The original size before padding (from XML attributes).
+    original_size: int | None = None
+
+    #: Whether this data should be decrypted with a scrambled key.
+    use_scrambled_key: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
 class ParseContext:
     """Context object containing metadata required for parsing HPS data."""
 
     #: The binary data for the vertices.
-    vertex_data: bytes | None = None
+    vertex_data: EncryptedData | bytes | None = None
 
     #: The binary data for the faces.
     face_data: bytes | None = None
@@ -34,6 +48,15 @@ class ParseContext:
 
     #: The default face color to use if it cannot be determined from the data.
     default_face_color: int | None = None
+
+    #: The vertex color data.
+    vertex_colors_data: EncryptedData | bytes | None = None
+
+    #: The texture coordinate data.
+    texture_coords_data: EncryptedData | bytes | None = None
+
+    #: A list of texture images.
+    texture_images: list[EncryptedData | bytes] = dataclasses.field(default_factory=list)
 
     #: The value used for integrity checking, if available.
     check_value: int | None = None

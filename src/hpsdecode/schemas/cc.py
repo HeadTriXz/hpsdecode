@@ -13,6 +13,7 @@ from hpsdecode.binary import BinaryReader
 from hpsdecode.exceptions import HPSParseError
 from hpsdecode.mesh import Edge, HPSMesh
 from hpsdecode.schemas.base import BaseSchemaParser, ParseContext, ParseResult
+from hpsdecode.texture import parse_texture_coords
 
 if t.TYPE_CHECKING:
     import numpy.typing as npt
@@ -39,19 +40,16 @@ class CCSchemaParser(BaseSchemaParser):
         vertices, vertex_commands = self.parse_vertices(context.vertex_data)
         faces, face_commands = self.parse_faces(context.face_data)
 
-        vertex_colors = np.empty((0, 3), dtype=np.uint8)
-        if context.default_vertex_color is not None:
-            c = context.default_vertex_color & 0xFFFFFF
-            vc = ((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF)
+        uv = self._parse_texture_coords(context.texture_coords_data, vertices.shape[0])
+        texture_images = [image for image in context.texture_images if isinstance(image, bytes)]
 
-            vertex_colors = np.full((vertices.shape[0], 3), vc, dtype=np.uint8)
+        vertex_colors = self._parse_vertex_colors(
+            context.vertex_colors_data,
+            context.default_vertex_color,
+            vertices.shape[0],
+        )
 
-        face_colors = np.empty((0, 3), dtype=np.uint8)
-        if context.default_face_color is not None:
-            c = context.default_face_color & 0xFFFFFF
-            fc = ((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF)
-
-            face_colors = np.full((faces.shape[0], 3), fc, dtype=np.uint8)
+        face_colors = self._parse_face_colors(context.default_face_color, faces.shape[0])
 
         return ParseResult(
             mesh=HPSMesh(
@@ -59,7 +57,8 @@ class CCSchemaParser(BaseSchemaParser):
                 faces=faces,
                 vertex_colors=vertex_colors,
                 face_colors=face_colors,
-                uv=np.empty((0, 2), dtype=np.float32),
+                uv=uv,
+                texture_images=texture_images,
             ),
             vertex_commands=vertex_commands,
             face_commands=face_commands,
@@ -90,6 +89,19 @@ class CCSchemaParser(BaseSchemaParser):
         commands = []
 
         return vertices, commands
+
+    def _create_default_colors(self, color: int, count: int) -> npt.NDArray[np.uint8]:
+        """Create an array of default colors.
+
+        :param color: The color as a 32-bit integer (0xRRGGBB or 0xAARRGGBB).
+        :param count: Number of color entries to create.
+        :return: An array of RGB colors (count, 3).
+        """
+        r = (color >> 16) & 0xFF
+        g = (color >> 8) & 0xFF
+        b = color & 0xFF
+
+        return np.full((count, 3), [r, g, b], dtype=np.uint8)
 
     def _clear(self) -> None:
         """Reset the internal parser state for a new mesh."""
@@ -262,6 +274,10 @@ class CCSchemaParser(BaseSchemaParser):
                 raise HPSParseError(f"Unknown face command opcode: {opcode}", offset=reader.position)
 
     def _process_command(self, command: hpc.AnyFaceCommand) -> None:
+        """Process a single face command and update internal state.
+
+        :param command: The command to process.
+        """
         match command.op:
             case hpc.FaceCommandType.VERTEX_LIST:
                 v = self._next_global_vertex()
@@ -289,6 +305,82 @@ class CCSchemaParser(BaseSchemaParser):
                 self._next_global_vertex()
             case _:
                 raise HPSParseError(f"Cannot process unknown command: {command}")
+
+    def _parse_color_data(self, data: bytes, num_elements: int) -> npt.NDArray[np.uint8] | None:
+        """Parse color data from bytes.
+
+        :param data: The raw color data.
+        :param num_elements: Expected number of color entries.
+        :return: An array of RGB colors (N, 3), or None if parsing fails.
+        """
+        try:
+            bytes_per_element = len(data) // num_elements
+
+            # RGBA format
+            if bytes_per_element == 4:
+                colors = np.frombuffer(data, dtype=np.uint8).reshape(-1, 4)
+                return colors[:, :3]
+
+            # RGB format
+            if bytes_per_element == 3:
+                return np.frombuffer(data, dtype=np.uint8).reshape(-1, 3)
+
+            raise HPSParseError(
+                f"Unexpected color format: {bytes_per_element} bytes per element (expected 3 for RGB or 4 for RGBA)"
+            )
+
+        except (ValueError, TypeError) as e:
+            raise HPSParseError(f"Failed to parse color data: {e}") from e
+
+    def _parse_face_colors(self, default_color: int | None, num_faces: int) -> npt.NDArray[np.uint8]:
+        """Parse face colors from default color.
+
+        :param default_color: The default color to use.
+        :param num_faces: Number of faces for generating default colors.
+        :return: An array of RGB colors (M, 3), or empty if no default.
+        """
+        if default_color is not None:
+            return self._create_default_colors(default_color, num_faces)
+
+        return np.empty((0, 3), dtype=np.uint8)
+
+    def _parse_vertex_colors(
+        self,
+        data: bytes | None,
+        default_color: int | None,
+        num_vertices: int,
+    ) -> npt.NDArray[np.uint8]:
+        """Parse vertex colors from binary data or use default.
+
+        :param data: The binary vertex color data, or None if not present.
+        :param default_color: The default color to use if no data is provided.
+        :param num_vertices: Number of vertices for generating default colors.
+        :return: An array of RGB colors (N, 3), or empty if no data/default.
+        """
+        if data is not None and len(data) > 0:
+            colors = self._parse_color_data(data, num_vertices)
+            if colors is not None:
+                return colors
+
+        if default_color is not None:
+            return self._create_default_colors(default_color, num_vertices)
+
+        return np.empty((0, 3), dtype=np.uint8)
+
+    def _parse_texture_coords(self, data: bytes | None, num_vertices: int) -> npt.NDArray[np.floating]:
+        """Parse texture coordinates from binary data.
+
+        :param data: The binary texture coordinate data, or None if not present.
+        :param num_vertices: The expected number of vertices for validation.
+        :return: An array of UV coordinates (N, 2), or empty if no data.
+        """
+        if data is None or len(data) == 0:
+            return np.empty((0, 2), dtype=np.float32)
+
+        try:
+            return parse_texture_coords(data, num_vertices)
+        except ValueError as e:
+            raise HPSParseError(f"Failed to parse texture coordinates: {e}") from e
 
     def _remove_current_edge(self) -> None:
         """Remove the current edge from the edge list."""

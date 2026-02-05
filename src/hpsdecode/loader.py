@@ -17,12 +17,15 @@ if t.TYPE_CHECKING:
 
     from hpsdecode.encryption import EncryptionKeyProvider
 
-
-#: List of XML paths to search for texture images.
-TEXTURE_IMAGE_PATHS: t.Final[list[str]] = [
+#: List of XML paths to search for texture images that may be encrypted.
+TEXTURE_IMAGE_PATHS_ENCRYPTED: t.Final[list[str]] = [
     ".//TextureData2/TextureImages/AdditionalTextureImage",
     ".//TextureData/TextureImages/AdditionalTextureImage",
     ".//PartialTextureData/TextureImages/TextureImage",
+]
+
+#: List of XML paths to search for texture images in unencrypted files.
+TEXTURE_IMAGE_PATHS_UNENCRYPTED: t.Final[list[str]] = [
     ".//TextureImages/TextureImage",
 ]
 
@@ -77,9 +80,9 @@ def extract_encrypted_data(element: ET.Element, size_attribute_name: str = "Base
 
 
 def extract_binary_data(
-    element: ET.Element,
-    is_encrypted: bool,
-    size_attribute_name: str = "Base64EncodedBytes",
+        element: ET.Element,
+        is_encrypted: bool,
+        size_attribute_name: str = "Base64EncodedBytes",
 ) -> bytes | EncryptedData:
     """Extract binary data from an XML element, handling encryption if necessary.
 
@@ -133,8 +136,8 @@ def parse_xml(file: str | os.PathLike[str] | bytes) -> ET.ElementTree:
 
 
 def load_hps(
-    file: str | os.PathLike[str] | bytes,
-    encryption_key: bytes | EncryptionKeyProvider | None = None,
+        file: str | os.PathLike[str] | bytes,
+        encryption_key: bytes | EncryptionKeyProvider | None = None,
 ) -> tuple[HPSPackedScan, HPSMesh]:
     """Load an HPS file and decode its contents.
 
@@ -194,12 +197,25 @@ def load_hps(
     if texture_coords_element is not None:
         texture_coords_data = extract_binary_data(texture_coords_element, is_encrypted)
 
-    texture_images: list[bytes | EncryptedData] = []
-    for path in TEXTURE_IMAGE_PATHS:
-        texture_image_element = root.find(path)
-        if texture_image_element is not None:
-            texture_image_data = extract_binary_data(texture_image_element, is_encrypted)
-            texture_images.append(texture_image_data)
+    texture_images: dict[str, bytes | EncryptedData] = {}
+    seen_elements: set[int] = set()
+
+    texture_paths = [
+        *((p, True) for p in TEXTURE_IMAGE_PATHS_ENCRYPTED),
+        *((p, False) for p in TEXTURE_IMAGE_PATHS_UNENCRYPTED),
+    ]
+
+    for path, encryptable in texture_paths:
+        for texture_image_element in root.findall(path):
+            element_id = id(texture_image_element)
+            if element_id in seen_elements:
+                continue
+
+            seen_elements.add(element_id)
+            texture_images[f"{path}:{element_id}"] = extract_binary_data(
+                element=texture_image_element,
+                is_encrypted=is_encrypted and encryptable,
+            )
 
     properties: dict[str, t.Any] = {}
     properties_element = root.find("Properties")
@@ -220,7 +236,7 @@ def load_hps(
         default_face_color=int(default_face_color) if default_face_color else None,
         vertex_colors_data=vertex_colors_data,
         texture_coords_data=texture_coords_data,
-        texture_images=texture_images,
+        texture_images=list(texture_images.values()),
         check_value=int(check_value) if check_value else None,
         properties=properties,
     )

@@ -67,73 +67,61 @@ def _decompress_component(bits: int) -> float:
         return value * _SCALE_INSIDE
 
 
-def parse_texture_coords(data: bytes, num_vertices: int) -> npt.NDArray[np.floating]:
+def parse_texture_coords(data: bytes, num_vertices: int, faces: npt.NDArray[np.integer]) -> npt.NDArray[np.floating]:
     """Parse texture coordinates.
 
     The format stores one or more UV coordinates per vertex, with a flag byte
     indicating the storage mode:
 
         - Flag = 1: Single UV shared by all faces connected to this vertex.
-        - Flag = 0xFF: Multiple UVs (exact count unknown without topology).
+        - Flag = 0xFF: Multiple UVs (one per connected face).
         - Other: Exact number of UVs for connected faces.
 
     :param data: The raw binary texture coordinate data.
     :param num_vertices: The expected number of vertices.
-    :return: Array of UV coordinates with shape (num_vertices, 2).
+    :param faces: Face indices array of shape (num_faces, 3).
+    :return: Array of UV coordinates with shape (num_faces * 3, 2).
     :raises ValueError: If data is malformed or insufficient.
     """
     reader = BinaryReader(data)
-    uvs = []
+    num_faces = faces.shape[0]
+
+    face_corners = faces.ravel()
+    vertex_corners: list[list[int]] = [[] for _ in range(num_vertices)]
+    for corner_idx, vertex_idx in enumerate(face_corners):
+        vertex_corners[vertex_idx].append(corner_idx)
+
+    uvs = np.zeros((num_faces * 3, 2), dtype=np.float32)
 
     for vertex_idx in range(num_vertices):
         try:
             flag = reader.read_uint8()
+            corners = vertex_corners[vertex_idx]
 
-            # Read the first UV coordinate for this vertex
-            uv = _read_uv_coordinate(reader, vertex_idx)
-            uvs.append(uv)
+            if flag == 1:
+                # Single UV shared by all corners
+                compressed = reader.read_uint32()
+                if compressed != _NO_UV_MARKER:
+                    u, v = decompress_texture_coord(compressed)
+                    for corner_idx in corners:
+                        uvs[corner_idx] = [u, v]
+            else:
+                # Multiple UVs (one per face)
+                if flag != 0xFF:
+                    num_faces_for_vertex = len(corners)
+                    if flag != num_faces_for_vertex:
+                        raise ValueError(
+                            f"Mismatch at vertex {vertex_idx}: flag={flag}, expected={num_faces_for_vertex}"
+                        )
 
-            # Skip additional UV coordinates if present
-            num_additional = _count_additional_uvs(flag)
-            for _ in range(num_additional):
-                reader.read_uint32()
+                corners_sorted = sorted(corners, key=lambda c: c // 3)
+                for corner_idx in corners_sorted:
+                    compressed = reader.read_uint32()
+                    if compressed != _NO_UV_MARKER:
+                        u, v = decompress_texture_coord(compressed)
+                        uvs[corner_idx] = [u, v]
 
         except EOFError as e:
             raise ValueError(f"Unexpected end of texture data at vertex {vertex_idx}/{num_vertices}") from e
 
-    if len(uvs) != num_vertices:
-        raise ValueError(f"UV count mismatch: expected {num_vertices}, got {len(uvs)}")
-
-    return np.array(uvs, dtype=np.float32)
-
-
-def _read_uv_coordinate(reader: BinaryReader, vertex_idx: int) -> list[float]:
-    """Read and decompress a single UV coordinate.
-
-    :param reader: The binary reader.
-    :param vertex_idx: The current vertex index (for error messages).
-    :return: A [u, v] pair.
-    :raises EOFError: If insufficient data.
-    """
-    try:
-        compressed = reader.read_uint32()
-    except EOFError as e:
-        raise ValueError(f"Insufficient data for UV at vertex {vertex_idx}") from e
-
-    if compressed == _NO_UV_MARKER:
-        return [0.0, 0.0]
-
-    u, v = decompress_texture_coord(compressed)
-    return [u, v]
-
-
-def _count_additional_uvs(flag: int) -> int:
-    """Determine how many additional UV coordinates to skip after the first.
-
-    :param flag: The flag byte from the data stream.
-    :return: Number of additional UVs to skip (0 if only one UV).
-    """
-    if flag == 1 or flag == 0xFF:
-        return 0
-
-    return max(0, flag - 1)
+    return uvs

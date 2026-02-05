@@ -40,7 +40,7 @@ class CCSchemaParser(BaseSchemaParser):
         vertices, vertex_commands = self.parse_vertices(context.vertex_data)
         faces, face_commands = self.parse_faces(context.face_data)
 
-        uv = self._parse_texture_coords(context.texture_coords_data, vertices.shape[0])
+        uv = self._parse_texture_coords(context.texture_coords_data, vertices.shape[0], faces)
         texture_images = [image for image in context.texture_images if isinstance(image, bytes)]
 
         vertex_colors = self._parse_vertex_colors(
@@ -367,18 +367,24 @@ class CCSchemaParser(BaseSchemaParser):
 
         return np.empty((0, 3), dtype=np.uint8)
 
-    def _parse_texture_coords(self, data: bytes | None, num_vertices: int) -> npt.NDArray[np.floating]:
-        """Parse texture coordinates from binary data.
+    def _parse_texture_coords(
+        self,
+        data: bytes | None,
+        num_vertices: int,
+        faces: npt.NDArray[np.integer],
+    ) -> npt.NDArray[np.floating]:
+        """Parse texture coordinates from binary data in per-face-corner format.
 
         :param data: The binary texture coordinate data, or None if not present.
         :param num_vertices: The expected number of vertices for validation.
-        :return: An array of UV coordinates (N, 2), or empty if no data.
+        :param faces: Face indices array for building topology.
+        :return: An array of UV coordinates (num_faces * 3, 2), or empty if no data.
         """
         if data is None or len(data) == 0:
             return np.empty((0, 2), dtype=np.float32)
 
         try:
-            return parse_texture_coords(data, num_vertices)
+            return parse_texture_coords(data, num_vertices, faces)
         except ValueError as e:
             raise HPSParseError(f"Failed to parse texture coordinates: {e}") from e
 

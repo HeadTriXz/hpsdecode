@@ -79,7 +79,7 @@ class HPSMesh:
     #: Per-face RGB colors as (M, 3) uint8 array, or empty.
     face_colors: npt.NDArray[np.uint8]
 
-    #: Texture coordinates as (N, 2) float array, or empty.
+    #: Texture coordinates as (M, 2) float array, or empty.
     uv: npt.NDArray[np.floating]
 
     #: Texture image data (raw bytes, multiple images possible).

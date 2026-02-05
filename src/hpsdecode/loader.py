@@ -80,9 +80,9 @@ def extract_encrypted_data(element: ET.Element, size_attribute_name: str = "Base
 
 
 def extract_binary_data(
-        element: ET.Element,
-        is_encrypted: bool,
-        size_attribute_name: str = "Base64EncodedBytes",
+    element: ET.Element,
+    is_encrypted: bool,
+    size_attribute_name: str = "Base64EncodedBytes",
 ) -> bytes | EncryptedData:
     """Extract binary data from an XML element, handling encryption if necessary.
 
@@ -136,8 +136,8 @@ def parse_xml(file: str | os.PathLike[str] | bytes) -> ET.ElementTree:
 
 
 def load_hps(
-        file: str | os.PathLike[str] | bytes,
-        encryption_key: bytes | EncryptionKeyProvider | None = None,
+    file: str | os.PathLike[str] | bytes,
+    encryption_key: bytes | EncryptionKeyProvider | None = None,
 ) -> tuple[HPSPackedScan, HPSMesh]:
     """Load an HPS file and decode its contents.
 

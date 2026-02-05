@@ -7,16 +7,23 @@ __all__ = ["CESchemaParser"]
 import hashlib
 import zlib
 
-from hpsdecode.encryption import BlowfishDecryptor, EncryptionKeyProvider, EnvironmentKeyProvider, StaticKeyProvider
+from hpsdecode.encryption import (
+    BlowfishDecryptor,
+    EncryptionKeyProvider,
+    EnvironmentKeyProvider,
+    StaticKeyProvider,
+    scramble_key,
+)
 from hpsdecode.exceptions import HPSEncryptionError
-from hpsdecode.schemas.base import ParseContext, ParseResult
+from hpsdecode.schemas.base import EncryptedData, ParseContext, ParseResult
 from hpsdecode.schemas.cc import CCSchemaParser
 
 
 class CESchemaParser(CCSchemaParser):
     """Parser for the 'CE' HPS compression schema.
 
-    The CE schema is CC with Blowfish encryption on vertex data.
+    The CE schema is CC with Blowfish encryption on vertex data and optional
+    encryption on textures, colors, and other data.
     """
 
     HPS_ATTR_ENCRYPTION_KEY_ID: str = "EKID"
@@ -49,7 +56,7 @@ class CESchemaParser(CCSchemaParser):
         """
         key = self._derive_key(context.properties)
 
-        decrypted_vertex_data = BlowfishDecryptor(key).decrypt(context.vertex_data, context.vertex_count * 12)
+        decrypted_vertex_data = self._decrypt_data(context.vertex_data, key)
         if context.check_value is not None:
             adler = zlib.adler32(decrypted_vertex_data) & 0xFFFFFFFF
             adler = int.from_bytes(adler.to_bytes(4, "little"), "big")
@@ -59,12 +66,28 @@ class CESchemaParser(CCSchemaParser):
                     f"Vertex data integrity check failed: expected {context.check_value:#010x}, got {adler:#010x}"
                 )
 
+        decrypted_texture_coords = None
+        if context.texture_coords_data is not None:
+            decrypted_texture_coords = self._decrypt_data(context.texture_coords_data, key)
+
+        decrypted_vertex_colors = None
+        if context.vertex_colors_data is not None:
+            decrypted_vertex_colors = self._decrypt_data(context.vertex_colors_data, key)
+
+        decrypted_texture_images = []
+        for image in context.texture_images:
+            decrypted_texture_images.append(self._decrypt_data(image, key))
+
         decrypted_context = ParseContext(
             properties=context.properties,
             vertex_data=decrypted_vertex_data,
             face_data=context.face_data,
+            texture_coords_data=decrypted_texture_coords,
+            vertex_colors_data=decrypted_vertex_colors,
+            texture_images=decrypted_texture_images,
             vertex_count=context.vertex_count,
             face_count=context.face_count,
+            default_vertex_color=context.default_vertex_color,
             default_face_color=context.default_face_color,
         )
 
@@ -86,6 +109,21 @@ class CESchemaParser(CCSchemaParser):
 
         canonical = ";".join(sorted(set(items))) + ";"
         return hashlib.md5(canonical.encode("utf-8")).hexdigest().upper()
+
+    def _decrypt_data(self, data: EncryptedData | bytes, key: bytes) -> bytes:
+        """Decrypt data with appropriate key (scrambled or normal).
+
+        :param data: The encrypted data (either EncryptedData or raw bytes).
+        :param key: The base encryption key.
+        :return: The decrypted data.
+        """
+        if isinstance(data, bytes):
+            return data
+
+        decryption_key = scramble_key(key) if data.use_scrambled_key else key
+        decryptor = BlowfishDecryptor(decryption_key)
+
+        return decryptor.decrypt(data.data, data.original_size)
 
     def _derive_key(self, properties: dict[str, str]) -> bytes:
         """Derive the encryption key from file properties.

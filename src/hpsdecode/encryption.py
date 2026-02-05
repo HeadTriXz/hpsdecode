@@ -7,6 +7,7 @@ __all__ = [
     "EncryptionKeyProvider",
     "EnvironmentKeyProvider",
     "StaticKeyProvider",
+    "scramble_key",
 ]
 
 import abc
@@ -35,6 +36,17 @@ def swap_endianness(data: bytes) -> bytes:
             result[i : i + len(block)] = block
 
     return bytes(result)
+
+
+def scramble_key(key: bytes) -> bytes:
+    """Scramble an encryption key by reversing and XORing each byte with 123.
+
+    This is used for certain encrypted data types in CE schema (e.g., texture coordinates).
+
+    :param key: The original encryption key.
+    :return: The scrambled key.
+    """
+    return bytes(b ^ 123 for b in reversed(key))
 
 
 class EncryptionKeyProvider(abc.ABC):

@@ -57,6 +57,27 @@ vertices = mesh.vertices
 faces = mesh.faces
 ```
 
+## Exporting Meshes
+
+After loading and decoding an HPS file, you can export the mesh to common 3D file formats for use in other software or workflows:
+
+```python
+mesh.export("output.obj")   # OBJ
+mesh.export("output.ply")   # PLY
+mesh.export("output.stl")   # STL
+```
+
+### Format Support
+
+| Format  | Vertices & Faces | Vertex Colors | Textures | Binary/ASCII |
+|---------|:----------------:|:-------------:|:--------:|:------------:|
+| **OBJ** |        ✅         |      ✅*       |    ✅     |    ASCII     |
+| **PLY** |        ✅         |       ✅       |   ✅**    | ASCII/Binary |
+| **STL** |        ✅         |       ❌       |    ❌     | ASCII/Binary |
+
+<sup>* OBJ vertex colors use a non-standard extension; not all software supports this.</sup>  
+<sup>** PLY textures are baked into vertex colors. This may result in loss of quality.</sup>
+
 ## Compression Schemas
 
 | Schema | Status        | Description                                                                        |

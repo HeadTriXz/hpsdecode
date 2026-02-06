@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["OBJExporter"]
+__all__ = ["MaterialConfig", "OBJExporter"]
 
 import io
 import typing as t

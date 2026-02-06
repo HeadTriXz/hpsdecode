@@ -16,6 +16,7 @@ if t.TYPE_CHECKING:
     import numpy.typing as npt
 
     from hpsdecode.commands import AnyFaceCommand, AnyVertexCommand
+    from hpsdecode.export.obj import MaterialConfig
 
 
 SchemaType: t.TypeAlias = t.Literal["CA", "CB", "CC", "CE"]
@@ -127,6 +128,7 @@ class HPSMesh:
         binary: bool = True,
         include_colors: bool = True,
         include_textures: bool = True,
+        material: MaterialConfig | None = None,
     ) -> None:
         """Export an HPS mesh to a file.
 
@@ -136,6 +138,7 @@ class HPSMesh:
         :param include_colors: Whether to include vertex colors if available (OBJ/PLY only). Default is ``True``.
         :param include_textures: Whether to include textures if available (OBJ only)
             or bake textures to vertex colors (PLY only). Default is ``True``.
+        :param material: The material configuration (OBJ only). If ``None``, default values are used.
         :raises ValueError: If the format is unsupported or incompatible with options.
         """
         export_mesh(
@@ -145,4 +148,5 @@ class HPSMesh:
             binary=binary,
             include_colors=include_colors,
             include_textures=include_textures,
+            material=material,
         )

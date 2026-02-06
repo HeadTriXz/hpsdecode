@@ -8,7 +8,7 @@ import enum
 import typing as t
 from pathlib import Path
 
-from hpsdecode.export.obj import OBJExporter
+from hpsdecode.export.obj import MaterialConfig, OBJExporter
 from hpsdecode.export.ply import PLYExporter
 from hpsdecode.export.stl import STLExporter
 
@@ -49,6 +49,7 @@ def export_mesh(
     binary: bool = True,
     include_colors: bool = True,
     include_textures: bool = True,
+    material: MaterialConfig | None = None,
 ) -> None:
     """Export an HPS mesh to a file.
 
@@ -59,6 +60,7 @@ def export_mesh(
     :param include_colors: Whether to include vertex colors if available (OBJ/PLY only). Default is ``True``.
     :param include_textures: Whether to include textures if available (OBJ only)
         or bake textures to vertex colors (PLY only). Default is ``True``.
+    :param material: The material configuration (OBJ only). If ``None``, default values are used.
     :raises ValueError: If the format is unsupported or incompatible with options.
     """
     if export_format is None:
@@ -67,11 +69,10 @@ def export_mesh(
     if export_format == ExportFormat.STL:
         exporter = STLExporter(binary=binary)
     elif export_format == ExportFormat.OBJ:
-        exporter = OBJExporter(include_colors=include_colors, include_textures=include_textures)
+        exporter = OBJExporter(material=material, include_colors=include_colors, include_textures=include_textures)
     elif export_format == ExportFormat.PLY:
         exporter = PLYExporter(binary=binary, include_textures=include_textures)
     else:
         raise ValueError(f"Unsupported export format: {export_format}")
 
     exporter.export(mesh, output_path)
-

@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
-__all__ = ["decompress_texture_coord", "parse_texture_coords"]
+__all__ = [
+    "decompress_texture_coord",
+    "parse_texture_coords",
+    "face_colors_to_vertex_colors",
+    "texture_to_vertex_colors",
+    "deduplicate_vertices_for_uv",
+]
 
+import io
+import logging
 import typing as t
 
 import numpy as np
+from PIL import Image
 
 from hpsdecode.binary import BinaryReader
 
 if t.TYPE_CHECKING:
     import numpy.typing as npt
+
+    from hpsdecode.mesh import HPSMesh
+
+logger = logging.getLogger(__name__)
 
 
 #: Bit 15 indicates value is outside [0, 1].
@@ -125,3 +138,121 @@ def parse_texture_coords(data: bytes, num_vertices: int, faces: npt.NDArray[np.i
             raise ValueError(f"Unexpected end of texture data at vertex {vertex_idx}/{num_vertices}") from e
 
     return uvs
+
+
+def face_colors_to_vertex_colors(mesh: HPSMesh) -> npt.NDArray[np.uint8]:
+    """Convert face colors to vertex colors by averaging.
+
+    :param mesh: The mesh containing face colors.
+    :return: An array of vertex colors (N, 3).
+    """
+    vertex_colors = np.zeros((mesh.num_vertices, 3), dtype=np.float32)
+    vertex_counts = np.zeros(mesh.num_vertices, dtype=np.int32)
+
+    for face_idx, face in enumerate(mesh.faces):
+        face_color = mesh.face_colors[face_idx].astype(np.float32)
+        for vertex_idx in face:
+            vertex_colors[vertex_idx] += face_color
+            vertex_counts[vertex_idx] += 1
+
+    mask = vertex_counts > 0
+    vertex_colors[mask] /= vertex_counts[mask, np.newaxis]
+
+    return vertex_colors.astype(np.uint8)
+
+
+def texture_to_vertex_colors(mesh: HPSMesh) -> npt.NDArray[np.uint8]:
+    """Convert texture coordinates to vertex colors by sampling the texture image.
+
+    :param mesh: The mesh containing texture data and UV coordinates.
+    :return: An array of vertex colors (N, 3).
+    """
+    if not mesh.has_textures:
+        raise ValueError("Mesh has no texture images.")
+
+    if len(mesh.texture_images) > 1:
+        logger.warning("Multiple texture images found; using the first one only.")
+
+    image = Image.open(io.BytesIO(mesh.texture_images[0]))
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+
+    r, g, b = image.split()
+    image = Image.merge("RGB", (b, g, r))
+
+    width, height = image.size
+    image_array = np.array(image, dtype=np.uint8)
+
+    num_faces = mesh.num_faces
+    uv_coords = mesh.uv.reshape(num_faces, 3, 2)
+
+    vertex_color_samples: dict[int, list[npt.NDArray[np.uint8]]] = {}
+    for face_idx, face in enumerate(mesh.faces):
+        for corner_idx in range(3):
+            vertex_idx = int(face[corner_idx])
+            u, v = uv_coords[face_idx, corner_idx]
+
+            x = int(np.clip(u * (width - 1), 0, width - 1))
+            y = int(np.clip(v * (height - 1), 0, height - 1))
+
+            color = image_array[y, x]
+            if vertex_idx not in vertex_color_samples:
+                vertex_color_samples[vertex_idx] = []
+
+            vertex_color_samples[vertex_idx].append(color)
+
+    vertex_colors = np.zeros((mesh.num_vertices, 3), dtype=np.uint8)
+    for vertex_idx in range(mesh.num_vertices):
+        if vertex_idx in vertex_color_samples:
+            samples = vertex_color_samples[vertex_idx]
+            avg_color = np.mean(samples, axis=0).astype(np.uint8)
+            vertex_colors[vertex_idx] = avg_color
+        else:
+            vertex_colors[vertex_idx] = [128, 128, 128]
+
+    return vertex_colors
+
+
+def deduplicate_vertices_for_uv(
+    vertices: npt.NDArray[np.floating],
+    faces: npt.NDArray[np.integer],
+    uv_coords: npt.NDArray[np.floating],
+) -> tuple[
+    npt.NDArray[np.floating],
+    npt.NDArray[np.floating],
+    npt.NDArray[np.integer],
+]:
+    """Create unique vertex and UV coordinate combinations.
+
+    :param vertices: The vertices of the mesh (N, 3).
+    :param faces: The face indices of the mesh (M, 3).
+    :param uv_coords: The UV coordinates per face corner (M, 3, 2).
+    :return: (new_vertices, new_uvs, new_faces) where indices align.
+    """
+    vertex_uv_map: dict[tuple[int, tuple[float, float]], int] = {}
+    new_vertices: list[npt.NDArray[np.floating]] = []
+    new_uvs: list[tuple[float, float]] = []
+    new_faces: list[list[int]] = []
+
+    for face_idx, face in enumerate(faces):
+        new_face = []
+        for corner_idx in range(3):
+            vertex_idx = int(face[corner_idx])
+            uv = tuple(float(x) for x in uv_coords[face_idx, corner_idx])
+
+            key = (vertex_idx, uv)
+            if key not in vertex_uv_map:
+                unique_idx = len(new_vertices)
+                vertex_uv_map[key] = unique_idx
+                new_vertices.append(vertices[vertex_idx])
+                new_uvs.append(uv)
+
+            new_face.append(vertex_uv_map[key])
+
+        new_faces.append(new_face)
+
+    return (
+        np.array(new_vertices, dtype=np.float32),
+        np.array(new_uvs, dtype=np.float32),
+        np.array(new_faces, dtype=np.int32),
+    )

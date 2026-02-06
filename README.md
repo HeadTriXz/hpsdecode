@@ -18,11 +18,11 @@ HPS is a compressed 3D mesh format commonly used in dental scanning applications
 - Read mesh geometry (vertices and faces) from HPS files.
 - Supports CA, CC, and CE schemas, including encrypted files.
 - Extract mesh colors, texture coordinates (UVs) and texture images.
+- Export the mesh to OBJ, PLY and STL.
 
 <details>
 <summary>Planned Features</summary>
 
-- Mesh export to OBJ, PLY and STL.
 - Extract splines and curves in the scan data.
 - Command-line tools for conversion and visualization.
 

@@ -7,7 +7,11 @@ __all__ = ["Edge", "HPSMesh", "HPSPackedScan", "SchemaType"]
 import dataclasses
 import typing as t
 
+from hpsdecode.export import ExportFormat, export_mesh
+
 if t.TYPE_CHECKING:
+    import os
+
     import numpy as np
     import numpy.typing as npt
 
@@ -114,3 +118,31 @@ class HPSMesh:
     def has_textures(self) -> bool:
         """Whether the mesh has texture image data."""
         return len(self.texture_images) > 0
+
+    def export(
+        self,
+        output_path: str | os.PathLike[str],
+        export_format: ExportFormat | None = None,
+        *,
+        binary: bool = True,
+        include_colors: bool = True,
+        include_textures: bool = True,
+    ) -> None:
+        """Export an HPS mesh to a file.
+
+        :param output_path: The output file path.
+        :param export_format: The export format. If None, inferred from file extension.
+        :param binary: Whether to use binary format (STL/PLY only). Default is ``True``.
+        :param include_colors: Whether to include vertex colors if available (OBJ/PLY only). Default is ``True``.
+        :param include_textures: Whether to include textures if available (OBJ only)
+            or bake textures to vertex colors (PLY only). Default is ``True``.
+        :raises ValueError: If the format is unsupported or incompatible with options.
+        """
+        export_mesh(
+            self,
+            output_path,
+            export_format,
+            binary=binary,
+            include_colors=include_colors,
+            include_textures=include_textures,
+        )

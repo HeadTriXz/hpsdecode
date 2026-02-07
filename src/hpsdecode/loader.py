@@ -254,10 +254,17 @@ def load_hps(
         schema=schema,
         num_vertices=num_vertices,
         num_faces=num_faces,
-        vertex_data=vertex_data,
-        face_data=face_data,
+        vertex_data=context.vertex_data,
+        face_data=context.face_data,
+        default_vertex_color=context.default_vertex_color,
+        default_face_color=context.default_face_color,
+        vertex_colors_data=context.vertex_colors_data,
+        texture_coords_data=context.texture_coords_data,
+        texture_images=context.texture_images,
         vertex_commands=result.vertex_commands,
         face_commands=result.face_commands,
+        check_value=context.check_value,
+        properties=context.properties,
     )
 
     return packed, result.mesh

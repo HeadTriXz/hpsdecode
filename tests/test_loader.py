@@ -18,6 +18,9 @@ SIMPLE_MESH_XML = """
             </CA>
         </Binary_data>
     </Packed_geometry>
+    <Properties>
+        <Property name="TestProp" value="TestValue"/>
+    </Properties>
 </HPS>
 """
 
@@ -96,6 +99,13 @@ class TestLoadHPS:
 
         assert packed.schema == "CC"
         assert not packed.is_encrypted
+
+    def test_load_properties(self) -> None:
+        """Load properties from HPS file."""
+        packed, _ = load_hps(io.BytesIO(SIMPLE_MESH_XML.encode()))
+
+        assert "TestProp" in packed.properties
+        assert packed.properties["TestProp"] == "TestValue"
 
     def test_unsupported_schema_raises_error(self) -> None:
         """Raise HPSSchemaError for unsupported schema."""

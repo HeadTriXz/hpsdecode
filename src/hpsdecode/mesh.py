@@ -56,11 +56,32 @@ class HPSPackedScan:
     #: The raw face data.
     face_data: bytes
 
+    #: The default vertex color to use if it cannot be determined from the data.
+    default_vertex_color: int | None
+
+    #: The default face color to use if it cannot be determined from the data.
+    default_face_color: int | None
+
+    #: The vertex color data.
+    vertex_colors_data: bytes | None
+
+    #: The texture coordinate data.
+    texture_coords_data: bytes | None
+
+    #: A list of texture images.
+    texture_images: list[bytes]
+
     #: Parsed vertex command sequence.
     vertex_commands: list[AnyVertexCommand]
 
     #: Parsed face command sequence.
     face_commands: list[AnyFaceCommand]
+
+    #: The value used for integrity checking, if available.
+    check_value: int | None
+
+    #: The HPS file properties (e.g., encryption keys, package locks).
+    properties: dict[str, str]
 
     @property
     def is_encrypted(self) -> bool:

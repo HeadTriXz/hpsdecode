@@ -2,6 +2,7 @@
 
 # hpsdecode
 
+[![Build Status][badge-build]][link-build]
 [![PyPI Version][badge-pypi]][link-pypi]
 [![Python Version][badge-python]][link-repo]
 [![License][badge-license]][link-repo]
@@ -196,12 +197,14 @@ This package is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 
 <!-- Image References -->
+[badge-build]:https://img.shields.io/github/actions/workflow/status/HeadTriXz/hpsdecode/code-quality.yml?style=for-the-badge
 [badge-kofi]:https://ko-fi.com/img/githubbutton_sm.svg
 [badge-license]:https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge
 [badge-pypi]:https://img.shields.io/pypi/v/hpsdecode?style=for-the-badge
 [badge-python]:https://img.shields.io/pypi/pyversions/hpsdecode?style=for-the-badge
 
 <!-- Links -->
+[link-build]:https://github.com/HeadTriXz/hpsdecode/actions/workflows/code-quality.yml
 [link-kofi]:https://ko-fi.com/headtrixz
 [link-license]:https://github.com/HeadTriXz/hpsdecode/blob/main/LICENSE
 [link-pypi]:https://pypi.org/project/hpsdecode/

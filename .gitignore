@@ -13,3 +13,12 @@ wheels/
 # Editor files
 .vscode/
 .idea/
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+
+# Ruff cache
+.ruff_cache/

@@ -126,7 +126,7 @@ def get_required_text(element: ET.Element) -> str:
     return text
 
 
-def parse_xml(file: str | os.PathLike[str] | bytes) -> ET.ElementTree:
+def parse_xml(file: str | os.PathLike[str] | t.IO[bytes] | bytes) -> ET.ElementTree:
     """Parse an HPS XML file.
 
     :param file: The path to the HPS file, raw bytes, or a file-like object.
@@ -136,7 +136,7 @@ def parse_xml(file: str | os.PathLike[str] | bytes) -> ET.ElementTree:
 
 
 def load_hps(
-    file: str | os.PathLike[str] | bytes,
+    file: str | os.PathLike[str] | t.IO[bytes] | bytes,
     encryption_key: bytes | EncryptionKeyProvider | None = None,
 ) -> tuple[HPSPackedScan, HPSMesh]:
     """Load an HPS file and decode its contents.

@@ -214,7 +214,7 @@ class TestOBJExporter:
 
         assert output_path.exists()
         assert (tmp_path / "test.mtl").exists()
-        assert (tmp_path / "test_texture.png").exists()
+        assert (tmp_path / "test.png").exists()
 
     def test_texture_references(self, textured_mesh: HPSMesh, tmp_path: Path) -> None:
         """Reference MTL file and include UV coordinates."""
@@ -247,7 +247,7 @@ class TestOBJExporter:
         assert "Kd " in content
         assert "Ks " in content
         assert "Ns " in content
-        assert "map_Kd test_texture.png" in content
+        assert "map_Kd test.png" in content
 
     def test_custom_material(self, textured_mesh: HPSMesh, tmp_path: Path) -> None:
         """Apply custom MaterialConfig to MTL file."""

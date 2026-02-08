@@ -6,18 +6,23 @@ import pytest
 from hpsdecode import load_hps
 from hpsdecode.exceptions import HPSParseError, HPSSchemaError
 
+#: An HPS 'Packed_geometry' XML string representing a mesh with three vertices and one triangle.
+SIMPLE_PACKED_GEOMETRY_XML = """
+<Packed_geometry>
+    <Schema>CA</Schema>
+    <Binary_data>
+        <CA version="1.0">
+            <Vertices base64_encoded_bytes="36" vertex_count="3">AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA</Vertices>
+            <Facets base64_encoded_bytes="1" facet_count="1">BA==</Facets>
+        </CA>
+    </Binary_data>
+</Packed_geometry>
+"""
+
 #: An HPS XML string representing a mesh with three vertices and one triangle.
-SIMPLE_MESH_XML = """
+SIMPLE_MESH_XML = f"""
 <HPS version="1.1">
-    <Packed_geometry>
-        <Schema>CA</Schema>
-        <Binary_data>
-            <CA version="1.0">
-                <Vertices base64_encoded_bytes="36" vertex_count="3">AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA</Vertices>
-                <Facets base64_encoded_bytes="1" facet_count="1">BA==</Facets>
-            </CA>
-        </Binary_data>
-    </Packed_geometry>
+    {SIMPLE_PACKED_GEOMETRY_XML}
     <Properties>
         <Property name="TestProp" value="TestValue"/>
     </Properties>
@@ -43,23 +48,74 @@ COLORED_MESH_XML = """
 """
 
 #: An HPS XML string representing a textured mesh with UVs and a PNG texture image.
-TEXTURED_MESH_XML = """
+TEXTURED_MESH_XML = f"""
 <HPS version="1.1">
-    <Packed_geometry>
-        <Schema>CC</Schema>
-        <Binary_data>
-            <CC version="1.0">
-                <Vertices base64_encoded_bytes="36" vertex_count="3">AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA</Vertices>
-                <Facets base64_encoded_bytes="1" facet_count="1">BA==</Facets>
-            </CC>
-        </Binary_data>
-    </Packed_geometry>
+    {SIMPLE_PACKED_GEOMETRY_XML}
     <TextureData2>
         <PerVertexTextureCoord Base64EncodedBytes="15" Key="1" TextureCoordId="0">AQAAAAAB/38AAAEAAP9/</PerVertexTextureCoord>
         <TextureImages>
             <TextureImage Version="2" Width="2" Height="2" TextureName="Texture" Base64EncodedBytes="75" RefTextureCoordId="0" Id="0" TextureCoordSet="0">iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEklEQVR4nGP83+DAwMDAxAAGABXdAcOKp/0nAAAAAElFTkSuQmCC</TextureImage>
         </TextureImages>
     </TextureData2>
+</HPS>
+"""
+
+#: An HPS XML string representing a mesh with a single spline.
+MESH_WITH_SPLINE_XML = f"""
+<HPS version="1.1">
+    {SIMPLE_PACKED_GEOMETRY_XML}
+    <Splines>
+        <Object name="Spline" type="TSysSpline">
+            <Property name="iMisc1" value="12"/>
+            <Property name="Closed" value="False"/>
+            <Property name="Radius" value="0.25"/>
+            <Property name="Color" value="16737380"/>
+            <Property name="Name" value="Test Spline"/>
+            <ControlPointsPacked>AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAPwAAgD8AAAAA</ControlPointsPacked>
+        </Object>
+    </Splines>
+</HPS>
+"""
+
+#: An HPS XML string representing a mesh with a cyclic spline.
+MESH_WITH_CYCLIC_SPLINE_XML = f"""
+<HPS version="1.1">
+    {SIMPLE_PACKED_GEOMETRY_XML}
+    <Splines>
+        <Object name="Spline" type="TSysSpline">
+            <Property name="iMisc1" value="5"/>
+            <Property name="Closed" value="True"/>
+            <Property name="Radius" value="0.1"/>
+            <Property name="Color" value="255"/>
+            <Property name="Name" value="Cyclic Spline"/>
+            <ControlPointsPacked>AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAPwAAgD8AAAAA</ControlPointsPacked>
+        </Object>
+    </Splines>
+</HPS>
+"""
+
+#: An HPS XML string representing a mesh with multiple splines.
+MESH_WITH_MULTIPLE_SPLINES_XML = f"""
+<HPS version="1.1">
+    {SIMPLE_PACKED_GEOMETRY_XML}
+    <Splines>
+        <Object name="Spline" type="TSysSpline">
+            <Property name="iMisc1" value="10"/>
+            <Property name="Closed" value="False"/>
+            <Property name="Radius" value="0.15"/>
+            <Property name="Color" value="16711680"/>
+            <Property name="Name" value="First Spline"/>
+            <ControlPointsPacked>AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAPwAAgD8AAAAA</ControlPointsPacked>
+        </Object>
+        <Object name="Spline" type="TSysSpline">
+            <Property name="iMisc1" value="20"/>
+            <Property name="Closed" value="True"/>
+            <Property name="Radius" value="0.2"/>
+            <Property name="Color" value="65280"/>
+            <Property name="Name" value="Second Spline"/>
+            <ControlPointsPacked>AAAAAAAAAAAAAAA/AAAAAAAAgD8AAAA/</ControlPointsPacked>
+        </Object>
+    </Splines>
 </HPS>
 """
 
@@ -255,3 +311,100 @@ class TestLoadHPSWithTextures:
 
         assert mesh.uv.shape[0] > 0
         assert mesh.uv.shape[1] == 2
+
+
+class TestLoadHPSWithSplines:
+    """Tests for loading meshes with spline data."""
+
+    def test_load_mesh_with_spline(self) -> None:
+        """Load mesh with a single spline."""
+        packed, mesh = load_hps(io.BytesIO(MESH_WITH_SPLINE_XML.encode()))
+
+        assert mesh.has_splines
+        assert len(mesh.splines) == 1
+
+    def test_parse_spline_name(self) -> None:
+        """Parse spline name property correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_SPLINE_XML.encode()))
+
+        spline = mesh.splines[0]
+        assert spline.name == "Test Spline"
+
+    def test_parse_spline_radius(self) -> None:
+        """Parse spline radius property correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_SPLINE_XML.encode()))
+
+        spline = mesh.splines[0]
+        assert spline.radius == pytest.approx(0.25)
+
+    def test_parse_spline_color(self) -> None:
+        """Parse spline color property correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_SPLINE_XML.encode()))
+
+        spline = mesh.splines[0]
+        assert spline.color == 16737380
+
+    def test_parse_spline_misc(self) -> None:
+        """Parse spline misc property correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_SPLINE_XML.encode()))
+
+        spline = mesh.splines[0]
+        assert spline.misc == 12
+
+    def test_parse_spline_open(self) -> None:
+        """Parse open spline correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_SPLINE_XML.encode()))
+
+        spline = mesh.splines[0]
+        assert not spline.is_cyclic
+
+    def test_parse_spline_closed(self) -> None:
+        """Parse cyclic spline correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_CYCLIC_SPLINE_XML.encode()))
+
+        spline = mesh.splines[0]
+        assert spline.is_cyclic
+
+    def test_parse_spline_control_points(self) -> None:
+        """Parse spline control points correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_SPLINE_XML.encode()))
+
+        spline = mesh.splines[0]
+        assert spline.num_control_points == 3
+        assert spline.control_points.shape == (3, 3)
+        assert spline.control_points[0, 0] == pytest.approx(0.0)
+        assert spline.control_points[1, 0] == pytest.approx(1.0)
+        assert spline.control_points[2, 0] == pytest.approx(0.5)
+
+    def test_load_multiple_splines(self) -> None:
+        """Load mesh with multiple splines."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_MULTIPLE_SPLINES_XML.encode()))
+
+        assert mesh.has_splines
+        assert len(mesh.splines) == 2
+
+    def test_parse_multiple_splines_properties(self) -> None:
+        """Parse properties from multiple splines correctly."""
+        _, mesh = load_hps(io.BytesIO(MESH_WITH_MULTIPLE_SPLINES_XML.encode()))
+
+        first_spline = mesh.splines[0]
+        second_spline = mesh.splines[1]
+
+        assert first_spline.name == "First Spline"
+        assert first_spline.radius == pytest.approx(0.15)
+        assert first_spline.color == 16711680
+        assert first_spline.misc == 10
+        assert not first_spline.is_cyclic
+
+        assert second_spline.name == "Second Spline"
+        assert second_spline.radius == pytest.approx(0.2)
+        assert second_spline.color == 65280
+        assert second_spline.misc == 20
+        assert second_spline.is_cyclic
+
+    def test_mesh_without_splines(self) -> None:
+        """Load mesh without splines correctly."""
+        _, mesh = load_hps(io.BytesIO(SIMPLE_MESH_XML.encode()))
+
+        assert not mesh.has_splines
+        assert len(mesh.splines) == 0

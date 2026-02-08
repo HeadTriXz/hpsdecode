@@ -133,10 +133,9 @@ class OBJExporter(BaseExporter):
         :param mesh: The mesh to export.
         :param path: The output file path.
         """
-        mtl_name = path.stem
+        mtl_name = self._sanitize_material_name(path.stem)
         mtl_path = path.with_suffix(".mtl")
-        texture_name = f"{path.stem}_texture.png"
-        texture_path = path.parent / texture_name
+        texture_path = path.with_suffix(".png")
 
         num_faces = mesh.num_faces
         uv_coords = mesh.uv.reshape(num_faces, 3, 2)
@@ -161,7 +160,7 @@ class OBJExporter(BaseExporter):
             for face in new_faces:
                 f.write(f"f {face[0] + 1}/{face[0] + 1} {face[1] + 1}/{face[1] + 1} {face[2] + 1}/{face[2] + 1}\n")
 
-        self._write_mtl_file(mtl_path, mtl_name, texture_name)
+        self._write_mtl_file(mtl_path, mtl_name, texture_path.name)
         self._write_texture_image(mesh.texture_images[0], texture_path)
 
     def _write_mtl_file(self, mtl_path: Path, material_name: str, texture_filename: str) -> None:
@@ -183,6 +182,22 @@ class OBJExporter(BaseExporter):
             f.write(f"Ni {mat.optical_density:.4f}\n")
             f.write(f"d {mat.dissolve:.4f}\n")
             f.write(f"map_Kd {texture_filename}\n")
+
+    @staticmethod
+    def _sanitize_material_name(name: str) -> str:
+        """Sanitize material name for MTL files.
+
+        :param name: The original material name.
+        :return: A sanitized material name with invalid characters replaced.
+        """
+        sanitized = ""
+        for char in name.strip():
+            if char.isalnum() or char in "_-":
+                sanitized += char
+            else:
+                sanitized += "_"
+
+        return sanitized or "material"
 
     @staticmethod
     def _write_texture_image(texture_data: bytes, texture_path: Path) -> None:

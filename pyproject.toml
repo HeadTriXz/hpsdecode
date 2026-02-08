@@ -34,6 +34,9 @@ classifiers = [
 Homepage = "https://github.com/HeadTriXz/hpsdecode"
 Issues = "https://github.com/HeadTriXz/hpsdecode/issues"
 
+[project.scripts]
+hpsdecode = "hpsdecode.__main__:main"
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",

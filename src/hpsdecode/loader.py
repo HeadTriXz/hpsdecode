@@ -138,11 +138,11 @@ def get_property_value(element: ET.Element, property_name: str) -> str:
     :return: The property value.
     :raises HPSParseError: If the property or its value is missing.
     """
-    property_elem = element.find(f".//Property[@name='{property_name}']")
-    if property_elem is None:
+    property_element = element.find(f".//Property[@name='{property_name}']")
+    if property_element is None:
         raise HPSParseError(f"Missing 'Property' element with name='{property_name}'")
 
-    value = property_elem.get("value")
+    value = property_element.get("value")
     if value is None:
         raise HPSParseError(f"Missing 'value' attribute on Property[@name='{property_name}']")
 
@@ -223,18 +223,18 @@ def parse_spline(element: ET.Element) -> Spline:
     except ValueError as e:
         raise HPSParseError(f"Failed to parse spline property values: {e}") from e
 
-    control_points_packed_elem = element.find(".//ControlPointsPacked")
-    control_points_xml_elem = element.find(".//ControlPoints")
+    control_points_packed_element = element.find(".//ControlPointsPacked")
+    control_points_xml_element = element.find(".//ControlPoints")
 
-    if control_points_packed_elem is not None:
-        control_points_text = control_points_packed_elem.text
+    if control_points_packed_element is not None:
+        control_points_text = control_points_packed_element.text
         if control_points_text is None or control_points_text.strip() == "":
             raise HPSParseError("ControlPointsPacked element has no content")
 
         control_points_data = base64.b64decode(control_points_text.strip())
         control_points = extract_control_points_packed(control_points_data)
-    elif control_points_xml_elem is not None:
-        control_points = extract_control_points_xml(control_points_xml_elem)
+    elif control_points_xml_element is not None:
+        control_points = extract_control_points_xml(control_points_xml_element)
     else:
         raise HPSParseError("Spline object is missing control points")
 
@@ -260,8 +260,8 @@ def parse_splines(root: ET.Element) -> list[Spline]:
     if splines_container is None:
         return splines
 
-    for spline_obj in splines_container.findall(".//Object[@name='Spline']"):
-        spline = parse_spline(spline_obj)
+    for obj in splines_container.findall(".//Object[@name='Spline']"):
+        spline = parse_spline(obj)
         splines.append(spline)
 
     return splines

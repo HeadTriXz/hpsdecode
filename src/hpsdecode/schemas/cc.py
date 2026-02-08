@@ -5,6 +5,7 @@ from __future__ import annotations
 __all__ = ["CCSchemaParser"]
 
 import typing as t
+from enum import Enum
 
 import numpy as np
 
@@ -17,6 +18,13 @@ from hpsdecode.texture import parse_texture_coords
 
 if t.TYPE_CHECKING:
     import numpy.typing as npt
+
+
+class IndexMode(Enum):
+    """Enum for vertex index mode."""
+
+    MODE_16BIT = 16
+    MODE_32BIT = 32
 
 
 class CCSchemaParser(BaseSchemaParser):
@@ -38,7 +46,7 @@ class CCSchemaParser(BaseSchemaParser):
         :return: The parsing result containing the decoded mesh and commands.
         """
         vertices, vertex_commands = self.parse_vertices(context.vertex_data)
-        faces, face_commands = self.parse_faces(context.face_data)
+        faces, face_commands = self.parse_faces(context.face_data, context.face_count, len(vertices))
 
         uv = self._parse_texture_coords(context.texture_coords_data, vertices.shape[0], faces)
         texture_images = [image for image in context.texture_images if isinstance(image, bytes)]
@@ -64,20 +72,43 @@ class CCSchemaParser(BaseSchemaParser):
             face_commands=face_commands,
         )
 
-    def parse_faces(self, data: bytes) -> tuple[npt.NDArray[np.integer], list[hpc.AnyFaceCommand]]:
+    def parse_faces(
+        self,
+        data: bytes,
+        face_count: int,
+        vertex_count: int,
+    ) -> tuple[npt.NDArray[np.integer], list[hpc.AnyFaceCommand]]:
         """Parse face data from bytes.
 
         :param data: The raw byte data containing face data.
+        :param face_count: Expected number of faces (used for validation).
+        :param vertex_count: Total number of vertices (used for validation).
         :return: An array of face indices (M, 3) and the face commands.
         """
-        self._clear()
+        errors: list[HPSParseError] = []
+        for mode in (IndexMode.MODE_16BIT, IndexMode.MODE_32BIT):
+            try:
+                self._clear()
 
-        commands = self._parse_commands(data)
-        for command in commands:
-            self._process_command(command)
+                commands = self._parse_commands(data, mode)
+                for command in commands:
+                    self._process_command(command, vertex_count)
 
-        faces = np.array(self._faces, dtype=np.int32)
-        return faces, commands
+                faces = np.array(self._faces, dtype=np.int32)
+                if len(faces) != face_count:
+                    raise HPSParseError(
+                        f"Face count mismatch in {mode.name} mode: expected {face_count}, got {len(faces)}"
+                    )
+
+                return faces, commands
+            except HPSParseError as e:
+                errors.append(e)
+                continue
+
+        raise HPSParseError(
+            "Failed to parse face data with both 16-bit and 32-bit index modes.\n"
+            "Errors encountered:\n" + "\n".join(f"  - {e}" for e in errors)
+        )
 
     def parse_vertices(self, data: bytes) -> tuple[npt.NDArray[np.floating], list[hpc.AnyVertexCommand]]:
         """Parse vertex data from bytes.
@@ -206,10 +237,11 @@ class CCSchemaParser(BaseSchemaParser):
         self._global_vertex_ptr += 1
         return v
 
-    def _parse_commands(self, data: bytes) -> list[hpc.AnyFaceCommand]:
+    def _parse_commands(self, data: bytes, mode: IndexMode) -> list[hpc.AnyFaceCommand]:
         """Parse face commands from the binary data.
 
         :param data: The raw byte data containing face commands.
+        :param mode: The index mode (16-bit or 32-bit).
         :return: A list of parsed face commands.
         """
         reader = BinaryReader(data)
@@ -225,16 +257,17 @@ class CCSchemaParser(BaseSchemaParser):
                 raise HPSParseError("Upper 4 bits of face command byte must be zero", offset=reader.position - 1)
 
             opcode = command_byte & 0x0F
-            command = self._parse_single_command(reader, opcode)
+            command = self._parse_single_command(reader, opcode, mode)
             commands.append(command)
 
         return commands
 
-    def _parse_single_command(self, reader: BinaryReader, opcode: int) -> hpc.AnyFaceCommand:
+    def _parse_single_command(self, reader: BinaryReader, opcode: int, mode: IndexMode) -> hpc.AnyFaceCommand:
         """Parse a single command given its opcode.
 
         :param reader: The binary reader positioned after the opcode byte.
         :param opcode: The command opcode.
+        :param mode: The index mode (16-bit or 32-bit).
         :return: The parsed command.
         :raises HPSParseError: If the opcode is unknown.
         """
@@ -250,6 +283,14 @@ class CCSchemaParser(BaseSchemaParser):
             case hpc.FaceCommandType.RESTART:
                 return hpc.Restart()
             case hpc.FaceCommandType.RESTART_16:
+                if mode == IndexMode.MODE_32BIT:
+                    # 16-bit opcode but 32-bit payload (╯°□°）╯︵ ┻━┻
+                    return hpc.Restart16(
+                        v0=reader.read_uint32(),
+                        v1=reader.read_uint32(),
+                        v2=reader.read_uint32(),
+                    )
+
                 return hpc.Restart16(
                     v0=reader.read_uint16(),
                     v1=reader.read_uint16(),
@@ -262,8 +303,11 @@ class CCSchemaParser(BaseSchemaParser):
                     v2=reader.read_uint32(),
                 )
             case hpc.FaceCommandType.ABSOLUTE_16:
-                # Why can the Absolute16 command have 32-bit values? (╯°□°）╯︵ ┻━┻
-                return hpc.Absolute16(v=reader.read_uint32())
+                if mode == IndexMode.MODE_32BIT:
+                    # 16-bit opcode but 32-bit payload (╯°□°）╯︵ ┻━┻
+                    return hpc.Absolute16(v=reader.read_uint32())
+
+                return hpc.Absolute16(v=reader.read_uint16())
             case hpc.FaceCommandType.ABSOLUTE_32:
                 return hpc.Absolute32(v=reader.read_uint32())
             case hpc.FaceCommandType.REMOVE:
@@ -273,10 +317,11 @@ class CCSchemaParser(BaseSchemaParser):
             case _:
                 raise HPSParseError(f"Unknown face command opcode: {opcode}", offset=reader.position)
 
-    def _process_command(self, command: hpc.AnyFaceCommand) -> None:
+    def _process_command(self, command: hpc.AnyFaceCommand, vertex_count: int | None = None) -> None:
         """Process a single face command and update internal state.
 
         :param command: The command to process.
+        :param vertex_count: The total number of vertices for bounds checking.
         """
         match command.op:
             case hpc.FaceCommandType.VERTEX_LIST:
@@ -295,8 +340,10 @@ class CCSchemaParser(BaseSchemaParser):
                 v2 = self._next_global_vertex()
                 self._create_restart_face(v0, v1, v2)
             case hpc.FaceCommandType.RESTART_16 | hpc.FaceCommandType.RESTART_32:
+                self._validate_indices(command.v0, command.v1, command.v2, vertex_count=vertex_count)
                 self._create_restart_face(command.v0, command.v1, command.v2)
             case hpc.FaceCommandType.ABSOLUTE_16 | hpc.FaceCommandType.ABSOLUTE_32:
+                self._validate_indices(command.v, vertex_count=vertex_count)
                 self._extend_current_edge(command.v)
                 self._increase_edge_pointer(2)
             case hpc.FaceCommandType.REMOVE:
@@ -425,3 +472,17 @@ class CCSchemaParser(BaseSchemaParser):
                 self._current_edge_idx = curr_idx % len(self._edge_list)
             else:
                 self._current_edge_idx = 0
+
+    def _validate_indices(self, *indices: int, vertex_count: int | None) -> None:
+        """Validate vertex indices are within expected range.
+
+        :param indices: The vertex indices to validate.
+        :param vertex_count: The total number of vertices for bounds checking.
+        :raises HPSParseError: If index is out of bounds.
+        """
+        if vertex_count is None:
+            return
+
+        for v in indices:
+            if v < 0 or v >= vertex_count:
+                raise HPSParseError(f"Vertex index {v} out of bounds (0 to {vertex_count - 1})")

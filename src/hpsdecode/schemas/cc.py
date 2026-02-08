@@ -67,6 +67,7 @@ class CCSchemaParser(BaseSchemaParser):
                 face_colors=face_colors,
                 uv=uv,
                 texture_images=texture_images,
+                splines=context.splines,
             ),
             vertex_commands=vertex_commands,
             face_commands=face_commands,

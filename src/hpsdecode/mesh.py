@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["Edge", "HPSMesh", "HPSPackedScan", "SchemaType"]
+__all__ = ["Edge", "HPSMesh", "HPSPackedScan", "SchemaType", "Spline"]
 
 import dataclasses
 import typing as t
@@ -38,6 +38,34 @@ class Edge:
 
 
 @dataclasses.dataclass
+class Spline:
+    """A 3D spline defined by control points."""
+
+    #: The name/identifier of the spline.
+    name: str
+
+    #: The control points of the spline as an (N, 3) float array.
+    control_points: npt.NDArray[np.floating]
+
+    #: The radius of the spline.
+    radius: float
+
+    #: Whether the spline is cyclic (i.e., forms a closed loop).
+    is_cyclic: bool
+
+    #: The color of the spline.
+    color: int
+
+    #: Metadata or flags associated with the spline.
+    misc: int
+
+    @property
+    def num_control_points(self) -> int:
+        """The number of control points in the spline."""
+        return int(self.control_points.shape[0])
+
+
+@dataclasses.dataclass
 class HPSPackedScan:
     """Metadata and commands from a packed HPS scan."""
 
@@ -70,6 +98,9 @@ class HPSPackedScan:
 
     #: A list of texture images.
     texture_images: list[bytes]
+
+    #: A list of splines associated with the scan, if any.
+    splines: list[Spline]
 
     #: Parsed vertex command sequence.
     vertex_commands: list[AnyVertexCommand]
@@ -111,6 +142,9 @@ class HPSMesh:
     #: Texture image data (raw bytes, multiple images possible).
     texture_images: list[bytes] = dataclasses.field(default_factory=list)
 
+    #: The splines associated with the mesh, if any.
+    splines: list[Spline] = dataclasses.field(default_factory=list)
+
     @property
     def num_faces(self) -> int:
         """Number of faces in the mesh."""
@@ -135,6 +169,11 @@ class HPSMesh:
     def has_face_colors(self) -> bool:
         """Whether the mesh has per-face colors."""
         return self.face_colors.size > 0
+
+    @property
+    def has_splines(self) -> bool:
+        """Whether the mesh has any splines."""
+        return len(self.splines) > 0
 
     @property
     def has_textures(self) -> bool:

@@ -85,6 +85,7 @@ class CESchemaParser(CCSchemaParser):
             texture_coords_data=decrypted_texture_coords,
             vertex_colors_data=decrypted_vertex_colors,
             texture_images=decrypted_texture_images,
+            splines=context.splines,
             vertex_count=context.vertex_count,
             face_count=context.face_count,
             default_vertex_color=context.default_vertex_color,

@@ -8,12 +8,16 @@ import base64
 import typing as t
 import xml.etree.ElementTree as ET
 
+import numpy as np
+
 from hpsdecode.exceptions import HPSParseError, HPSSchemaError
-from hpsdecode.mesh import HPSMesh, HPSPackedScan, SchemaType
+from hpsdecode.mesh import HPSMesh, HPSPackedScan, SchemaType, Spline
 from hpsdecode.schemas import SUPPORTED_SCHEMAS, EncryptedData, ParseContext, get_parser
 
 if t.TYPE_CHECKING:
     import os
+
+    import numpy.typing as npt
 
     from hpsdecode.encryption import EncryptionKeyProvider
 
@@ -126,6 +130,143 @@ def get_required_text(element: ET.Element) -> str:
     return text
 
 
+def get_property_value(element: ET.Element, property_name: str) -> str:
+    """Get the value attribute from a 'Property' element.
+
+    :param element: The XML element.
+    :param property_name: The name of the property to find.
+    :return: The property value.
+    :raises HPSParseError: If the property or its value is missing.
+    """
+    property_element = element.find(f".//Property[@name='{property_name}']")
+    if property_element is None:
+        raise HPSParseError(f"Missing 'Property' element with name='{property_name}'")
+
+    value = property_element.get("value")
+    if value is None:
+        raise HPSParseError(f"Missing 'value' attribute on Property[@name='{property_name}']")
+
+    return value
+
+
+def extract_control_points_packed(data: bytes) -> npt.NDArray[np.floating]:
+    """Extract 3D control points from packed binary data (base64-encoded).
+
+    :param data: The binary data containing packed float coordinates.
+    :return: A numpy array of shape (N, 3) containing the control points.
+    :raises HPSParseError: If the data length is not divisible by 4 (size of float) or if no valid points are found.
+    """
+    if len(data) % 4 != 0:
+        raise HPSParseError(f"Packed control points data length {len(data)} is not divisible by 4 (sizeof float)")
+
+    floats = np.frombuffer(data, dtype=np.float32)
+    num_points = len(floats) // 3
+    if num_points == 0:
+        raise HPSParseError("No complete control points found in packed data")
+
+    return floats[: num_points * 3].reshape(num_points, 3)
+
+
+def extract_control_points_xml(element: ET.Element) -> npt.NDArray[np.floating]:
+    """Extract 3D control points from XML elements.
+
+    :param element: The XML element containing the control point objects.
+    :return: A numpy array of shape (N, 3) containing the control points.
+    :raises HPSParseError: If any control point is missing required attributes or if no valid points are found.
+    """
+    points: list[tuple[float, float, float]] = []
+
+    for obj in element.findall("Object"):
+        vector = obj.find("Vector[@name='p']")
+        if vector is None:
+            raise HPSParseError("Object in ControlPoints is missing Vector[@name='p'] element")
+
+        x_str = vector.get("x")
+        y_str = vector.get("y")
+        z_str = vector.get("z")
+        if x_str is None or y_str is None or z_str is None:
+            raise HPSParseError("Vector element is missing x, y, or z attribute")
+
+        try:
+            x = float(x_str)
+            y = float(y_str)
+            z = float(z_str)
+        except ValueError as e:
+            raise HPSParseError(f"Failed to parse vector coordinates: {e}") from e
+
+        points.append((x, y, z))
+
+    if not points:
+        raise HPSParseError("ControlPoints element contains no valid control points")
+
+    return np.array(points, dtype=np.float32)
+
+
+def parse_spline(element: ET.Element) -> Spline:
+    """Parse a single spline from an XML Object element.
+
+    :param element: The XML element representing the spline object.
+    :return: A Spline object containing the parsed data.
+    :raises HPSParseError: If required elements or attributes are missing.
+    """
+    name = get_property_value(element, "Name")
+    radius_str = get_property_value(element, "Radius")
+    closed_str = get_property_value(element, "Closed")
+    color_str = get_property_value(element, "Color")
+    misc_str = get_property_value(element, "iMisc1")
+
+    try:
+        radius = float(radius_str)
+        is_cyclic = closed_str.lower() == "true"
+        color = int(color_str)
+        misc = int(misc_str)
+    except ValueError as e:
+        raise HPSParseError(f"Failed to parse spline property values: {e}") from e
+
+    control_points_packed_element = element.find(".//ControlPointsPacked")
+    control_points_xml_element = element.find(".//ControlPoints")
+
+    if control_points_packed_element is not None:
+        control_points_text = control_points_packed_element.text
+        if control_points_text is None or control_points_text.strip() == "":
+            raise HPSParseError("ControlPointsPacked element has no content")
+
+        control_points_data = base64.b64decode(control_points_text.strip())
+        control_points = extract_control_points_packed(control_points_data)
+    elif control_points_xml_element is not None:
+        control_points = extract_control_points_xml(control_points_xml_element)
+    else:
+        raise HPSParseError("Spline object is missing control points")
+
+    return Spline(
+        name=name,
+        control_points=control_points,
+        radius=radius,
+        is_cyclic=is_cyclic,
+        color=color,
+        misc=misc,
+    )
+
+
+def parse_splines(root: ET.Element) -> list[Spline]:
+    """Parse all splines from the XML root element.
+
+    :param root: The root XML element of the HPS file.
+    :return: A list of parsed Spline objects.
+    """
+    splines: list[Spline] = []
+
+    splines_container = root.find(".//Splines")
+    if splines_container is None:
+        return splines
+
+    for obj in splines_container.findall(".//Object[@name='Spline']"):
+        spline = parse_spline(obj)
+        splines.append(spline)
+
+    return splines
+
+
 def parse_xml(file: str | os.PathLike[str] | t.IO[bytes] | bytes) -> ET.ElementTree:
     """Parse an HPS XML file.
 
@@ -217,6 +358,8 @@ def load_hps(
                 is_encrypted=is_encrypted and encryptable,
             )
 
+    splines = parse_splines(root)
+
     properties: dict[str, t.Any] = {}
     properties_element = root.find("Properties")
     if properties_element is not None:
@@ -237,6 +380,7 @@ def load_hps(
         vertex_colors_data=vertex_colors_data,
         texture_coords_data=texture_coords_data,
         texture_images=list(texture_images.values()),
+        splines=splines,
         check_value=int(check_value) if check_value else None,
         properties=properties,
     )
@@ -261,6 +405,7 @@ def load_hps(
         vertex_colors_data=context.vertex_colors_data,
         texture_coords_data=context.texture_coords_data,
         texture_images=context.texture_images,
+        splines=context.splines,
         vertex_commands=result.vertex_commands,
         face_commands=result.face_commands,
         check_value=context.check_value,

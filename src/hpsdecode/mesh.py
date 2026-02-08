@@ -53,6 +53,9 @@ class Spline:
     #: Whether the spline is cyclic (i.e., forms a closed loop).
     is_cyclic: bool
 
+    #: The color of the spline.
+    color: int
+
     #: Metadata or flags associated with the spline.
     misc: int
 

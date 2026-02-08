@@ -156,15 +156,15 @@ def extract_control_points_packed(data: bytes) -> npt.NDArray[np.floating]:
     :return: A numpy array of shape (N, 3) containing the control points.
     :raises HPSParseError: If the data length is not divisible by 12 (3 floats).
     """
-    if len(data) % 12 != 0:
-        raise HPSParseError(
-            f"Packed control points data length {len(data)} is not divisible by 12 (3 floats per point)"
-        )
+    if len(data) % 4 != 0:
+        raise HPSParseError(f"Packed control points data length {len(data)} is not divisible by 4 (sizeof float)")
 
-    num_floats = len(data) // 4
-    num_points = num_floats // 3
+    floats = np.frombuffer(data, dtype=np.float32)
+    num_points = len(floats) // 3
+    if num_points == 0:
+        raise HPSParseError("No complete control points found in packed data")
 
-    return np.frombuffer(data, dtype=np.float32).reshape(num_points, 3)
+    return floats[: num_points * 3].reshape(num_points, 3)
 
 
 def extract_control_points_xml(element: ET.Element) -> npt.NDArray[np.floating]:
@@ -212,11 +212,13 @@ def parse_spline(spline_obj: ET.Element) -> Spline:
     name = get_property_value(spline_obj, "Name")
     radius_str = get_property_value(spline_obj, "Radius")
     closed_str = get_property_value(spline_obj, "Closed")
+    color_str = get_property_value(spline_obj, "Color")
     misc_str = get_property_value(spline_obj, "iMisc1")
 
     try:
         radius = float(radius_str)
         is_cyclic = closed_str.lower() == "true"
+        color = int(color_str)
         misc = int(misc_str)
     except ValueError as e:
         raise HPSParseError(f"Failed to parse spline property values: {e}") from e
@@ -238,10 +240,11 @@ def parse_spline(spline_obj: ET.Element) -> Spline:
 
     return Spline(
         name=name,
+        control_points=control_points,
         radius=radius,
         is_cyclic=is_cyclic,
+        color=color,
         misc=misc,
-        control_points=control_points,
     )
 
 

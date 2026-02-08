@@ -3,11 +3,13 @@ import io
 import pathlib
 
 import numpy as np
+import numpy.typing as npt
 import trimesh
 import trimesh.visual
 from PIL import Image
 
 from hpsdecode import load_hps
+from hpsdecode.mesh import Spline
 
 
 def convert_bgr_to_rgb(image_data: bytes) -> Image.Image:
@@ -22,6 +24,75 @@ def convert_bgr_to_rgb(image_data: bytes) -> Image.Image:
 
     r, g, b = img.split()
     return Image.merge("RGB", (b, g, r))
+
+
+def create_cylinder_mesh(
+    start_point: npt.NDArray[np.floating],
+    end_point: npt.NDArray[np.floating],
+    radius: float,
+    slices: int = 32,
+) -> trimesh.Trimesh:
+    """Create a cylinder mesh between two points.
+
+    :param start_point: The starting point of the cylinder.
+    :param end_point: The ending point of the cylinder.
+    :param radius: The radius of the cylinder.
+    :param slices: The number of slices around the cylinder circumference.
+    :return: A Trimesh representing the cylinder.
+    """
+    direction = end_point - start_point
+    height = np.linalg.norm(direction)
+    if height < 1e-6:
+        return trimesh.Trimesh()
+
+    cylinder = trimesh.creation.cylinder(radius=radius, height=height, sections=slices)
+
+    z_axis = np.array([0.0, 0.0, 1.0])
+    direction_normalized = direction / height
+
+    rotation_matrix = trimesh.geometry.align_vectors(z_axis, direction_normalized)
+    cylinder.apply_transform(rotation_matrix)
+
+    center = (start_point + end_point) / 2.0
+    cylinder.apply_translation(center)
+
+    return cylinder
+
+
+def create_spline_mesh(spline: Spline, slices: int = 32) -> trimesh.Trimesh:
+    """Create a mesh representation of a spline as connected cylinders.
+
+    :param spline: The spline to convert to a mesh.
+    :param slices: The number of slices around each cylinder circumference.
+    :return: A trimesh representing the spline.
+    """
+    if spline.num_control_points < 2:
+        return trimesh.Trimesh()
+
+    meshes = []
+    control_points = spline.control_points
+
+    for i in range(len(control_points) - 1):
+        cylinder = create_cylinder_mesh(control_points[i], control_points[i + 1], spline.radius, slices)
+        if cylinder.vertices.size > 0:
+            meshes.append(cylinder)
+
+    if spline.is_cyclic and len(control_points) >= 2:
+        cylinder = create_cylinder_mesh(control_points[-1], control_points[0], spline.radius, slices)
+        if cylinder.vertices.size > 0:
+            meshes.append(cylinder)
+
+    if not meshes:
+        return trimesh.Trimesh()
+
+    r = (spline.color >> 16) & 0xFF
+    g = (spline.color >> 8) & 0xFF
+    b = spline.color & 0xFF
+
+    combined = trimesh.util.concatenate(meshes)
+    combined.visual.vertex_colors = np.array([r, g, b, 255], dtype=np.uint8)
+
+    return combined
 
 
 def create_texture_visual(
@@ -90,6 +161,11 @@ def main() -> None:
         action="store_true",
         help="Disable texture rendering even if available.",
     )
+    parser.add_argument(
+        "--show-splines",
+        action="store_true",
+        help="Show splines associated with the scan, if available.",
+    )
 
     args = parser.parse_args()
     if not args.input.exists():
@@ -125,7 +201,18 @@ def main() -> None:
             process=False,
         )
 
-    t_mesh.show(caption=args.input.name, smooth=False)
+    scene = trimesh.Scene()
+    scene.add_geometry(t_mesh, node_name="mesh")
+
+    if args.show_splines and mesh.has_splines:
+        print(f"Creating spline visualization ({len(mesh.splines)} splines)...")
+
+        for idx, spline in enumerate(mesh.splines):
+            spline_mesh = create_spline_mesh(spline)
+            if spline_mesh.vertices.size > 0:
+                scene.add_geometry(spline_mesh, node_name=f"spline_{idx}")
+
+    scene.show(caption=args.input.name, smooth=False)
 
 
 if __name__ == "__main__":

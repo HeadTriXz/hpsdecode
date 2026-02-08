@@ -10,7 +10,7 @@ import typing as t
 
 if t.TYPE_CHECKING:
     import hpsdecode.commands as hpc
-    from hpsdecode.mesh import HPSMesh
+    from hpsdecode.mesh import HPSMesh, Spline
 
 
 @dataclasses.dataclass(frozen=True)
@@ -57,6 +57,9 @@ class ParseContext:
 
     #: A list of texture images.
     texture_images: list[EncryptedData | bytes] = dataclasses.field(default_factory=list)
+
+    #: A list of splines associated with the scan, if any.
+    splines: list[Spline] = dataclasses.field(default_factory=list)
 
     #: The value used for integrity checking, if available.
     check_value: int | None = None

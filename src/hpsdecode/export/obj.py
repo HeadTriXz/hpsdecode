@@ -4,9 +4,9 @@ from __future__ import annotations
 
 __all__ = ["MaterialConfig", "OBJExporter"]
 
+import dataclasses
 import io
 import typing as t
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -23,7 +23,7 @@ if t.TYPE_CHECKING:
     from hpsdecode.mesh import HPSMesh
 
 
-@dataclass
+@dataclasses.dataclass
 class MaterialConfig:
     """Material properties for OBJ MTL files."""
 

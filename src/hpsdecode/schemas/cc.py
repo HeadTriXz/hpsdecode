@@ -59,6 +59,7 @@ class CCSchemaParser(BaseSchemaParser):
                 face_colors=face_colors,
                 uv=uv,
                 texture_images=texture_images,
+                splines=context.splines,
             ),
             vertex_commands=vertex_commands,
             face_commands=face_commands,
@@ -251,9 +252,9 @@ class CCSchemaParser(BaseSchemaParser):
                 return hpc.Restart()
             case hpc.FaceCommandType.RESTART_16:
                 return hpc.Restart16(
-                    v0=reader.read_uint16(),
-                    v1=reader.read_uint16(),
-                    v2=reader.read_uint16(),
+                    v0=reader.read_uint32(),
+                    v1=reader.read_uint32(),
+                    v2=reader.read_uint32(),
                 )
             case hpc.FaceCommandType.RESTART_32:
                 return hpc.Restart32(

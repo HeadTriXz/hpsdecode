@@ -20,12 +20,12 @@ HPS is a compressed 3D mesh format commonly used in dental scanning applications
 - Supports CA, CC, and CE schemas, including encrypted files.
 - Extract mesh colors, texture coordinates (UVs) and texture images.
 - Export the mesh to OBJ, PLY and STL.
+- Command-line tool for exporting meshes.
 
 <details>
 <summary>Planned Features</summary>
 
 - Extract splines and curves in the scan data.
-- Command-line tools for conversion and visualization.
 
 </details>
 
@@ -57,27 +57,6 @@ vertices = mesh.vertices
 # Face indices as (M, 3) int32 array  
 faces = mesh.faces
 ```
-
-## Exporting Meshes
-
-After loading and decoding an HPS file, you can export the mesh to common 3D file formats for use in other software or workflows:
-
-```python
-mesh.export("output.obj")   # OBJ
-mesh.export("output.ply")   # PLY
-mesh.export("output.stl")   # STL
-```
-
-### Format Support
-
-| Format  | Vertices & Faces | Vertex Colors | Textures | Binary/ASCII |
-|---------|:----------------:|:-------------:|:--------:|:------------:|
-| **OBJ** |        ✅         |      ✅*       |    ✅     |    ASCII     |
-| **PLY** |        ✅         |       ✅       |   ✅**    | ASCII/Binary |
-| **STL** |        ✅         |       ❌       |    ❌     | ASCII/Binary |
-
-<sup>* OBJ vertex colors use a non-standard extension; not all software supports this.</sup>  
-<sup>** PLY textures are baked into vertex colors. This may result in loss of quality.</sup>
 
 ## Compression Schemas
 
@@ -162,6 +141,54 @@ HPS files are XML documents containing base64-encoded binary mesh data:
     </Packed_geometry>
 </HPS>
 ```
+
+
+## Command-Line Interface (CLI)
+
+After installing, you can use the `hpsdecode` command to export meshes directly from HPS files.
+
+### Exporting Meshes
+
+```bash
+hpsdecode export input.hps output.obj
+```
+
+You can specify options such as export format (auto-detected by file extension), ASCII or binary mode,
+and whether to include/exclude colors or textures:
+
+```bash
+hpsdecode export input.hps output.ply --ascii --no-colors --no-textures
+```
+
+Encrypted HPS files (CE schema) require an encryption key.  
+You can supply it using `--key` or the `HPS_ENCRYPTION_KEY` environment variable:
+
+```bash
+hpsdecode export encrypted.hps output.obj --key "28,141,16,74,..."
+```
+
+#### Material Options
+
+For OBJ export, you can provide material properties:
+
+```bash
+hpsdecode export input.hps output.obj \
+  --ambient 0.5 0.5 0.5 --diffuse 0.8 0.8 0.8 \
+  --specular 1.0 1.0 1.0 --shininess 20 --dissolve 1.0
+```
+
+Run `hpsdecode export --help` for a full list of CLI options.
+
+### Format Support
+
+| Format  | Vertices & Faces | Vertex Colors | Textures | Binary/ASCII |
+|---------|:----------------:|:-------------:|:--------:|:------------:|
+| **OBJ** |        ✅         |      ✅*       |    ✅     |    ASCII     |
+| **PLY** |        ✅         |       ✅       |   ✅**    | ASCII/Binary |
+| **STL** |        ✅         |       ❌       |    ❌     | ASCII/Binary |
+
+<sup>* OBJ vertex colors use a non-standard extension; not all software supports this.</sup>  
+<sup>** PLY textures are baked into vertex colors. This may result in loss of quality.</sup>
 
 ## Example Scripts
 

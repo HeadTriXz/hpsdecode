@@ -293,9 +293,9 @@ class CCSchemaParser(BaseSchemaParser):
                     )
 
                 return hpc.Restart16(
-                    v0=reader.read_uint32(),
-                    v1=reader.read_uint32(),
-                    v2=reader.read_uint32(),
+                    v0=reader.read_uint16(),
+                    v1=reader.read_uint16(),
+                    v2=reader.read_uint16(),
                 )
             case hpc.FaceCommandType.RESTART_32:
                 return hpc.Restart32(

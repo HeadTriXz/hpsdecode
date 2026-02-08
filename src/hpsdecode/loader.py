@@ -154,7 +154,7 @@ def extract_control_points_packed(data: bytes) -> npt.NDArray[np.floating]:
 
     :param data: The binary data containing packed float coordinates.
     :return: A numpy array of shape (N, 3) containing the control points.
-    :raises HPSParseError: If the data length is not divisible by 12 (3 floats).
+    :raises HPSParseError: If the data length is not divisible by 4 (size of float) or if no valid points are found.
     """
     if len(data) % 4 != 0:
         raise HPSParseError(f"Packed control points data length {len(data)} is not divisible by 4 (sizeof float)")
@@ -202,18 +202,18 @@ def extract_control_points_xml(element: ET.Element) -> npt.NDArray[np.floating]:
     return np.array(points, dtype=np.float32)
 
 
-def parse_spline(spline_obj: ET.Element) -> Spline:
+def parse_spline(element: ET.Element) -> Spline:
     """Parse a single spline from an XML Object element.
 
-    :param spline_obj: The Object element with name='Spline'.
-    :return: A Spline object with all properties and control points.
+    :param element: The XML element representing the spline object.
+    :return: A Spline object containing the parsed data.
     :raises HPSParseError: If required elements or attributes are missing.
     """
-    name = get_property_value(spline_obj, "Name")
-    radius_str = get_property_value(spline_obj, "Radius")
-    closed_str = get_property_value(spline_obj, "Closed")
-    color_str = get_property_value(spline_obj, "Color")
-    misc_str = get_property_value(spline_obj, "iMisc1")
+    name = get_property_value(element, "Name")
+    radius_str = get_property_value(element, "Radius")
+    closed_str = get_property_value(element, "Closed")
+    color_str = get_property_value(element, "Color")
+    misc_str = get_property_value(element, "iMisc1")
 
     try:
         radius = float(radius_str)
@@ -223,8 +223,8 @@ def parse_spline(spline_obj: ET.Element) -> Spline:
     except ValueError as e:
         raise HPSParseError(f"Failed to parse spline property values: {e}") from e
 
-    control_points_packed_elem = spline_obj.find(".//ControlPointsPacked")
-    control_points_xml_elem = spline_obj.find(".//ControlPoints")
+    control_points_packed_elem = element.find(".//ControlPointsPacked")
+    control_points_xml_elem = element.find(".//ControlPoints")
 
     if control_points_packed_elem is not None:
         control_points_text = control_points_packed_elem.text

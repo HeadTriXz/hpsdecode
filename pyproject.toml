@@ -1,6 +1,6 @@
 [project]
 name = "hpsdecode"
-version = "0.2.0"
+version = "1.0.0"
 description = "A library for decoding HIMSA packed standard (HPS) files."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -11,9 +11,9 @@ dependencies = [
     "pillow>=12.1.0",
     "pycryptodome>=3.23.0",
 ]
-
+keywords = ["hps", "dcm", "3shape", "trios", "shapedesigner", "compression", "encryption", "mesh", "3d", "medical-imaging", "dental"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

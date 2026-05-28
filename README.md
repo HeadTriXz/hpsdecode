@@ -10,7 +10,7 @@
 </div>
 
 A Python library for decoding HPS (HIMSA Packed Scan) and DCM files used by dental and audiological scanning software
-such as [3Shape](https://www.3shape.com/) and [ShapeDesigner](https://www.mechatools.com/en/shapedesigner.html).
+such as [3Shape](https://www.3shape.com/).
 
 HPS is a compressed 3D mesh format commonly used in dental scanning applications and other HIMSA-compliant devices.
 
